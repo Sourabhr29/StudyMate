@@ -2252,6 +2252,79 @@ function bootApp() {
   render();
   checkAchievements();
 }
+/* ================================================================
+   26. BACKEND SYNC (Render API)
+   ================================================================ */
+const API_URL = 'https://studymate-backend.onrender.com'; // ⬅️ REPLACE THIS WITH YOUR REAL RENDER URL
+
+async function syncWithBackend() {
+  try {
+    toast('Syncing... ⏳');
+    const userId = S.user.email || 'defaultUser';
+    let pushedCount = 0;
+
+    // 1. Push local tasks to backend
+    for (const task of S.tasks) {
+      if (task.synced) continue; // Skip already synced tasks
+
+      try {
+        const res = await fetch(`${API_URL}/api/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userId,
+            title: task.title,
+            description: task.desc,
+            date: task.date,
+            time: task.time,
+            priority: task.priority,
+            category: task.category,
+            completed: task.done
+          })
+        });
+        if (res.ok) {
+          task.synced = true;
+          pushedCount++;
+        }
+      } catch (e) {
+        console.error('Push error:', e);
+      }
+    }
+
+    // 2. Pull tasks from backend
+    const res = await fetch(`${API_URL}/api/tasks?userId=${userId}`);
+    const remoteTasks = await res.json();
+    let pulledCount = 0;
+
+    if (Array.isArray(remoteTasks)) {
+      remoteTasks.forEach(rt => {
+        const exists = S.tasks.find(t => t.title === rt.title && t.date === rt.date);
+        if (!exists) {
+          S.tasks.push({
+            id: rt._id,
+            title: rt.title,
+            desc: rt.description || '',
+            date: rt.date,
+            time: rt.time || '',
+            priority: rt.priority || 'medium',
+            category: rt.category || 'study',
+            done: rt.completed,
+            repeat: 'none', remind: '15', goalId: '', subjectId: '',
+            synced: true
+          });
+          pulledCount++;
+        }
+      });
+    }
+
+    save();
+    render();
+    toast(`Synced! Pushed ${pushedCount}, Pulled ${pulledCount} ✅`);
+  } catch (err) {
+    console.error(err);
+    toast('Sync failed. Check internet or backend URL.');
+  }
+}
 
 function init() {
   document.documentElement.setAttribute('data-theme', S.settings.theme);
