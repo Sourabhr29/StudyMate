@@ -686,7 +686,6 @@ function renderGoals() {
    12. VIEW — REMINDERS
    ================================================================ */
 function renderReminders() {
-  const t = todayISO();
   const list = [...S.reminders].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
 
   return `
@@ -1294,7 +1293,7 @@ function renderSettings() {
     <div class="card" style="text-align:center">
       <div style="font-size:26px">🎓</div>
       <div style="font-weight:800;margin-top:6px">StudyMate</div>
-      <div class="xs muted" style="margin-top:4px">Version 1.0 · Fresh Start</div>
+      <div class="xs muted" style="margin-top:4px">Version 1.1 · Full Cloud Sync</div>
     </div>
   `;
 }
@@ -1759,17 +1758,8 @@ function reminderAppliesToday(r, dateISO) {
    24. GLOBAL EVENT DELEGATION
    ================================================================ */
 document.addEventListener('click', e => {
-  // ---- Modal close (X button, Cancel button) ----
-  if (e.target.closest('[data-close-modal]')) {
-    closeModal();
-    return;
-  }
-
-  // ---- Modal backdrop click ----
-  if (e.target.matches('[data-close-backdrop]')) {
-    closeModal();
-    return;
-  }
+  if (e.target.closest('[data-close-modal]')) { closeModal(); return; }
+  if (e.target.matches('[data-close-backdrop]')) { closeModal(); return; }
 
   const el = e.target.closest('[data-action]');
   const navEl = e.target.closest('[data-nav]');
@@ -1807,7 +1797,7 @@ document.addEventListener('click', e => {
       if (task.done) {
         markActivity();
         if (task.repeat && task.repeat !== 'none') {
-          const next = { ...task, id: uid(), done: false };
+          const next = { ...task, id: uid(), done: false, synced: false };
           next.date = task.repeat === 'daily' ? addDays(task.date, 1)
                     : task.repeat === 'weekdays' ? nextWeekday(task.date)
                     : addDays(task.date, 7);
@@ -2112,7 +2102,7 @@ function nextWeekday(isoStr) {
 }
 
 /* ================================================================
-   26. BACKEND SYNC
+   26. FULL BACKEND SYNC (Tasks + Goals + Routines + Notes)
    ================================================================ */
 const API_URL = 'https://studymate-backend-5vyt.onrender.com'; // ⬅️ APNA RENDER URL YAHAN
 
@@ -2121,7 +2111,9 @@ async function syncWithBackend() {
     toast('Syncing... ⏳');
     const userId = S.user.email || 'defaultUser';
     let pushedCount = 0;
+    let pulledCount = 0;
 
+    // ========== PUSH: Tasks ==========
     for (const task of S.tasks) {
       if (task.synced) continue;
       try {
@@ -2129,44 +2121,128 @@ async function syncWithBackend() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            userId: userId,
-            title: task.title,
-            description: task.desc,
-            date: task.date,
-            time: task.time,
-            priority: task.priority,
-            category: task.category,
-            completed: task.done
+            userId, title: task.title, description: task.desc,
+            date: task.date, time: task.time, priority: task.priority,
+            category: task.category, completed: task.done
           })
         });
-        if (res.ok) {
-          task.synced = true;
-          pushedCount++;
-        }
-      } catch (e) {
-        console.error('Push error:', e);
-      }
+        if (res.ok) { task.synced = true; pushedCount++; }
+      } catch (e) { console.error('Task push error:', e); }
     }
 
-    const res = await fetch(`${API_URL}/api/tasks?userId=${userId}`);
-    const remoteTasks = await res.json();
-    let pulledCount = 0;
+    // ========== PUSH: Goals ==========
+    for (const goal of S.goals) {
+      if (goal.synced) continue;
+      try {
+        const res = await fetch(`${API_URL}/api/goals`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId, title: goal.title, desc: goal.desc,
+            deadline: goal.deadline, dailyTarget: goal.dailyTarget,
+            color: goal.color, milestones: goal.milestones || []
+          })
+        });
+        if (res.ok) { goal.synced = true; pushedCount++; }
+      } catch (e) { console.error('Goal push error:', e); }
+    }
 
+    // ========== PUSH: Routines ==========
+    for (const routine of S.routines) {
+      if (routine.synced) continue;
+      try {
+        const res = await fetch(`${API_URL}/api/routines`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId, title: routine.title, start: routine.start, end: routine.end,
+            icon: routine.icon, category: routine.category, days: routine.days || []
+          })
+        });
+        if (res.ok) { routine.synced = true; pushedCount++; }
+      } catch (e) { console.error('Routine push error:', e); }
+    }
+
+    // ========== PUSH: Notes ==========
+    for (const note of S.notes) {
+      if (note.synced) continue;
+      try {
+        const res = await fetch(`${API_URL}/api/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId, title: note.title, content: note.content,
+            pinned: note.pinned, tags: note.tags || []
+          })
+        });
+        if (res.ok) { note.synced = true; pushedCount++; }
+      } catch (e) { console.error('Note push error:', e); }
+    }
+
+    // ========== PULL: Tasks ==========
+    const tRes = await fetch(`${API_URL}/api/tasks?userId=${userId}`);
+    const remoteTasks = await tRes.json();
     if (Array.isArray(remoteTasks)) {
       remoteTasks.forEach(rt => {
         const exists = S.tasks.find(t => t.title === rt.title && t.date === rt.date);
         if (!exists) {
           S.tasks.push({
-            id: rt._id,
-            title: rt.title,
-            desc: rt.description || '',
-            date: rt.date,
-            time: rt.time || '',
-            priority: rt.priority || 'medium',
-            category: rt.category || 'study',
-            done: rt.completed,
-            repeat: 'none', remind: '15', goalId: '', subjectId: '',
-            synced: true
+            id: rt._id, title: rt.title, desc: rt.description || '',
+            date: rt.date, time: rt.time || '', priority: rt.priority || 'medium',
+            category: rt.category || 'study', done: rt.completed,
+            repeat: 'none', remind: '15', goalId: '', subjectId: '', synced: true
+          });
+          pulledCount++;
+        }
+      });
+    }
+
+    // ========== PULL: Goals ==========
+    const gRes = await fetch(`${API_URL}/api/goals?userId=${userId}`);
+    const remoteGoals = await gRes.json();
+    if (Array.isArray(remoteGoals)) {
+      remoteGoals.forEach(rg => {
+        const exists = S.goals.find(g => g.title === rg.title);
+        if (!exists) {
+          S.goals.push({
+            id: rg._id, title: rg.title, desc: rg.desc || '',
+            deadline: rg.deadline || '', dailyTarget: rg.dailyTarget || 0,
+            color: rg.color || '#6c8cff',
+            milestones: rg.milestones || [], synced: true
+          });
+          pulledCount++;
+        }
+      });
+    }
+
+    // ========== PULL: Routines ==========
+    const rRes = await fetch(`${API_URL}/api/routines?userId=${userId}`);
+    const remoteRoutines = await rRes.json();
+    if (Array.isArray(remoteRoutines)) {
+      remoteRoutines.forEach(rr => {
+        const exists = S.routines.find(r => r.title === rr.title && r.start === rr.start);
+        if (!exists) {
+          S.routines.push({
+            id: rr._id, title: rr.title, start: rr.start, end: rr.end,
+            icon: rr.icon || '📌', category: rr.category || 'personal',
+            days: rr.days || [0,1,2,3,4,5,6], synced: true
+          });
+          pulledCount++;
+        }
+      });
+    }
+
+    // ========== PULL: Notes ==========
+    const nRes = await fetch(`${API_URL}/api/notes?userId=${userId}`);
+    const remoteNotes = await nRes.json();
+    if (Array.isArray(remoteNotes)) {
+      remoteNotes.forEach(rn => {
+        const exists = S.notes.find(n => n.title === rn.title);
+        if (!exists) {
+          S.notes.push({
+            id: rn._id, title: rn.title, content: rn.content || '',
+            pinned: rn.pinned || false, tags: rn.tags || [],
+            createdAt: Date.now(), synced: true
           });
           pulledCount++;
         }
