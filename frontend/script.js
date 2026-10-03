@@ -78,17 +78,17 @@ function defaultState() {
     user: { name: '', email: '', course: '', year: '', mainGoal: '', avatar: '🎓', onboarded: false },
     tasks: [], routines: [], goals: [], reminders: [],
     subjects: [], sessions: [], notes: [],
-    routineLog: {},       // "routineId:YYYY-MM-DD" -> true
-    activity: {},         // "YYYY-MM-DD" -> true
-    fired: {},            // notification dedupe
-    achievements: [],     // unlocked ids
+    routineLog: {},
+    activity: {},
+    fired: {},
+    achievements: [],
     settings: {
       theme: 'dark',
       notify: false,
       sound: true,
       dayStart: '06:00',
       dayEnd: '23:00',
-      weekStart: 1,       // 1 = Monday, 0 = Sunday
+      weekStart: 1,
     },
   };
 }
@@ -107,7 +107,6 @@ function save() {
   catch (e) { console.warn('Save failed', e); }
 }
 
-/* ---- UI-only state (not persisted) ---- */
 const ui = {
   taskFilter: 'today',
   calMonth: new Date().getMonth(),
@@ -119,130 +118,52 @@ const ui = {
 };
 
 /* ================================================================
-   3. SAMPLE DATA (first run)
+   3. SAMPLE DATA (only used from Settings → Load Sample Data)
    ================================================================ */
 function seedSampleData() {
   const t = todayISO();
-  S.user = {
-    name: 'Sourabh', email: 'sourabh@example.com',
-    course: 'B.Tech', year: '3rd Year',
-    mainGoal: 'Internship Preparation', avatar: '🎓', onboarded: true,
-  };
-
   S.tasks = [
-    { id: uid(), title: 'DAA — Dijkstra Algorithm', desc: 'Revise + solve 3 problems', date: t, time: '14:00', priority: 'high',   category: 'study',      repeat: 'none', remind: '15', done: true,  goalId: '', subjectId: '' },
-    { id: uid(), title: 'HTML Practice',            desc: 'Build a landing page',     date: t, time: '16:00', priority: 'medium', category: 'coding',     repeat: 'none', remind: '15', done: true,  goalId: '', subjectId: '' },
+    { id: uid(), title: 'DAA — Dijkstra Algorithm', desc: 'Revise + solve 3 problems', date: t, time: '14:00', priority: 'high',   category: 'study',      repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '' },
+    { id: uid(), title: 'HTML Practice',            desc: 'Build a landing page',     date: t, time: '16:00', priority: 'medium', category: 'coding',     repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '' },
     { id: uid(), title: 'CN Revision — Unit 3',     desc: 'Transport layer notes',    date: t, time: '19:00', priority: 'high',   category: 'study',      repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '' },
     { id: uid(), title: 'Submit DAA Assignment',    desc: 'Upload on portal',         date: t, time: '21:00', priority: 'high',   category: 'assignment', repeat: 'none', remind: '30', done: false, goalId: '', subjectId: '' },
-    { id: uid(), title: 'Java — Collections',       desc: 'List, Map, Set',           date: addDays(t, 1), time: '10:00', priority: 'medium', category: 'study',  repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '' },
-    { id: uid(), title: 'Update Resume',            desc: 'Add latest project',       date: addDays(t, 2), time: '17:00', priority: 'low',    category: 'career', repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '' },
   ];
-
   S.routines = [
-    { id: uid(), title: 'Wake Up',    start: '06:30', end: '06:45', icon: '🌅', category: 'personal', days: [0,1,2,3,4,5,6] },
-    { id: uid(), title: 'Exercise',   start: '07:00', end: '07:45', icon: '🏃', category: 'health',   days: [1,2,3,4,5,6] },
-    { id: uid(), title: 'Breakfast',  start: '08:00', end: '08:30', icon: '🍳', category: 'personal', days: [0,1,2,3,4,5,6] },
-    { id: uid(), title: 'College',    start: '09:00', end: '13:00', icon: '🎓', category: 'college',  days: [1,2,3,4,5] },
-    { id: uid(), title: 'Lunch',      start: '13:00', end: '14:00', icon: '🍴', category: 'personal', days: [0,1,2,3,4,5,6] },
-    { id: uid(), title: 'DAA Study',  start: '14:00', end: '16:00', icon: '📚', category: 'study',    days: [0,1,2,3,4,5,6] },
-    { id: uid(), title: 'Coding',     start: '16:00', end: '18:00', icon: '💻', category: 'coding',   days: [0,1,2,3,4,5,6] },
-    { id: uid(), title: 'Break',      start: '18:00', end: '19:00', icon: '☕', category: 'personal', days: [0,1,2,3,4,5,6] },
-    { id: uid(), title: 'Revision',   start: '19:00', end: '21:00', icon: '📖', category: 'study',    days: [0,1,2,3,4,5,6] },
-    { id: uid(), title: 'Assignment', start: '21:00', end: '22:30', icon: '📝', category: 'assignment', days: [0,1,2,3,4,5,6] },
-    { id: uid(), title: 'Sleep',      start: '23:00', end: '23:30', icon: '😴', category: 'personal', days: [0,1,2,3,4,5,6] },
+    { id: uid(), title: 'Wake Up',   start: '06:30', end: '06:45', icon: '🌅', category: 'personal', days: [0,1,2,3,4,5,6] },
+    { id: uid(), title: 'Breakfast', start: '08:00', end: '08:30', icon: '🍳', category: 'personal', days: [0,1,2,3,4,5,6] },
+    { id: uid(), title: 'College',   start: '09:00', end: '13:00', icon: '🎓', category: 'college',  days: [1,2,3,4,5] },
+    { id: uid(), title: 'Study',     start: '14:00', end: '16:00', icon: '📚', category: 'study',    days: [0,1,2,3,4,5,6] },
+    { id: uid(), title: 'Sleep',     start: '23:00', end: '23:30', icon: '😴', category: 'personal', days: [0,1,2,3,4,5,6] },
   ];
-
-  const javaId = uid();
   S.goals = [
     {
-      id: javaId, title: 'Learn Java', desc: 'Complete Java from basics to project',
+      id: uid(), title: 'Learn Java', desc: 'Java from basics to project',
       deadline: `${new Date().getFullYear()}-12-30`, dailyTarget: 45, color: '#6c8cff',
       milestones: [
-        { id: uid(), title: 'Java Basics',        done: true },
-        { id: uid(), title: 'OOP',                done: true },
-        { id: uid(), title: 'Collections',        done: true },
-        { id: uid(), title: 'Exception Handling', done: false },
-        { id: uid(), title: 'File Handling',      done: false },
-        { id: uid(), title: 'Project',            done: false },
-      ],
-    },
-    {
-      id: uid(), title: 'Prepare for Internship', desc: 'DSA + Projects + Resume',
-      deadline: `${new Date().getFullYear() + 1}-06-30`, dailyTarget: 60, color: '#8b5cf6',
-      milestones: [
-        { id: uid(), title: 'Java',                 done: true },
-        { id: uid(), title: 'DSA',                  done: false },
-        { id: uid(), title: 'SQL',                  done: false },
-        { id: uid(), title: 'Projects',             done: false },
-        { id: uid(), title: 'Resume',               done: false },
-        { id: uid(), title: 'Interview Preparation',done: false },
+        { id: uid(), title: 'Java Basics', done: false },
+        { id: uid(), title: 'OOP',         done: false },
+        { id: uid(), title: 'Collections', done: false },
+        { id: uid(), title: 'Project',     done: false },
       ],
     },
   ];
-
   S.reminders = [
-    { id: uid(), title: 'DAA Class',              time: '10:00', date: t, repeat: 'weekly',  days: [1], enabled: true },
-    { id: uid(), title: 'Start Coding',           time: '16:00', date: t, repeat: 'daily',   days: [],  enabled: true },
-    { id: uid(), title: "Revise today's topics",  time: '21:00', date: t, repeat: 'daily',   days: [],  enabled: true },
-    { id: uid(), title: 'Submit Assignment',      time: '17:30', date: addDays(t, 1), repeat: 'none', days: [], enabled: true },
+    { id: uid(), title: 'Start Coding', time: '16:00', date: t, repeat: 'daily', days: [], enabled: true },
   ];
-
   S.subjects = [
     {
       id: uid(), name: 'DAA', color: '#6c8cff',
       units: [
         { id: uid(), name: 'Unit 1 — Foundations', topics: [
-          { id: uid(), name: 'Asymptotic Notation', done: true },
-          { id: uid(), name: 'Recurrence Relations', done: true },
-          { id: uid(), name: 'Divide & Conquer', done: true },
-        ]},
-        { id: uid(), name: 'Unit 2 — Graphs', topics: [
-          { id: uid(), name: 'BFS / DFS', done: true },
-          { id: uid(), name: 'Dijkstra', done: false },
-          { id: uid(), name: 'Bellman-Ford', done: false },
-          { id: uid(), name: 'MST (Kruskal/Prim)', done: false },
-        ]},
-      ],
-    },
-    {
-      id: uid(), name: 'Computer Networks', color: '#06b6d4',
-      units: [
-        { id: uid(), name: 'Unit 1 — Basics', topics: [
-          { id: uid(), name: 'OSI Model', done: true },
-          { id: uid(), name: 'TCP/IP Stack', done: true },
-          { id: uid(), name: 'Physical Layer', done: false },
-        ]},
-        { id: uid(), name: 'Unit 2 — Data Link', topics: [
-          { id: uid(), name: 'Framing', done: true },
-          { id: uid(), name: 'Error Detection', done: false },
-          { id: uid(), name: 'MAC Protocols', done: false },
+          { id: uid(), name: 'Asymptotic Notation', done: false },
+          { id: uid(), name: 'Recurrence Relations', done: false },
         ]},
       ],
     },
   ];
-
-  // 7 days of study sessions for nice charts
-  S.sessions = [];
-  const mins = [90, 120, 60, 150, 45, 180, 75];
-  for (let i = 6; i >= 0; i--) {
-    const d = addDays(t, -i);
-    S.sessions.push({
-      id: uid(), subjectId: '', topic: 'General Study',
-      minutes: mins[6 - i], date: d,
-    });
-  }
-
-  // Mark past 7 days as active so streak shows
-  for (let i = 0; i < 7; i++) S.activity[addDays(t, -i)] = true;
-  for (let i = 0; i < 5; i++) S.activity[addDays(t, -i - 7)] = true;
-
   S.notes = [
-    { id: uid(), title: 'DAA Important Questions', content: '1. Prove Dijkstra correctness\n2. Master theorem cases\n3. NP-completeness reductions', pinned: true,  tags: ['DAA'], createdAt: Date.now() },
-    { id: uid(), title: 'Java Syntax Cheatsheet',  content: 'List<Integer> l = new ArrayList<>();\nMap<String,Integer> m = new HashMap<>();', pinned: false, tags: ['Java'], createdAt: Date.now() },
-    { id: uid(), title: 'Project Ideas',           content: '• Student planner app\n• Expense tracker\n• Chat app with sockets', pinned: false, tags: ['Ideas'], createdAt: Date.now() },
+    { id: uid(), title: 'Welcome to StudyMate!', content: 'Yeh sample data hai.\nAap apne tasks, goals aur notes add kar sakte ho.', pinned: true, tags: [], createdAt: Date.now() },
   ];
-
-  S.user.name = 'Sourabh';
   save();
 }
 
@@ -278,7 +199,6 @@ function routineForDay(dateISO) {
 }
 function isRoutineDone(id, dateISO) { return !!S.routineLog[`${id}:${dateISO}`]; }
 
-/* ---- Streak ---- */
 function markActivity(dateISO = todayISO()) {
   S.activity[dateISO] = true;
   checkAchievements();
@@ -286,7 +206,7 @@ function markActivity(dateISO = todayISO()) {
 function computeStreak() {
   let cur = 0;
   let d = todayISO();
-  if (!S.activity[d]) d = addDays(d, -1);       // today not done yet → count from yesterday
+  if (!S.activity[d]) d = addDays(d, -1);
   while (S.activity[d]) { cur++; d = addDays(d, -1); }
   let best = 0, run = 0;
   const keys = Object.keys(S.activity).sort();
@@ -299,7 +219,6 @@ function computeStreak() {
   return { current: cur, best: Math.max(best, cur) };
 }
 
-/* ---- Achievements ---- */
 const ACHIEVEMENTS = [
   { id: 'first_day',   icon: '🌱', title: 'First Day',            desc: 'Complete your first day',        test: () => Object.keys(S.activity).length >= 1 },
   { id: 'streak_7',    icon: '🔥', title: '7 Day Streak',         desc: 'Stay consistent for 7 days',     test: () => computeStreak().best >= 7 },
@@ -358,7 +277,6 @@ function openModal({ title, body, submit = 'Save', onSubmit, hideSubmit = false,
     modalSubmitHandler?.(new FormData(form));
   });
 
-  // autofocus first input
   setTimeout(() => form.querySelector('input,textarea,select')?.focus(), 120);
 }
 function closeModal() {
@@ -367,7 +285,6 @@ function closeModal() {
   setTimeout(() => { if (!root.classList.contains('open')) root.innerHTML = ''; }, 250);
 }
 
-/* Helper: build <option> list */
 function opts(list, selected, labels = {}) {
   return list.map(v =>
     `<option value="${esc(v)}" ${String(selected) === String(v) ? 'selected' : ''}>${esc(labels[v] || v)}</option>`
@@ -375,7 +292,7 @@ function opts(list, selected, labels = {}) {
 }
 
 /* ================================================================
-   6. AUTH SCREEN
+   6. AUTH SCREEN (Fixed: No sample data, always empty start)
    ================================================================ */
 function renderAuth() {
   $('#auth').innerHTML = `
@@ -403,37 +320,28 @@ function renderAuth() {
         <label>Main goal
           <input name="mainGoal" placeholder="e.g. Internship Preparation">
         </label>
-        <label style="display:flex;align-items:center;gap:9px;font-size:13px;color:var(--text)">
-          <input type="checkbox" name="sample" checked style="width:auto;margin:0">
-          Start with sample data (recommended)
-        </label>
         <button class="btn primary block" type="submit" style="margin-top:6px">Get Started →</button>
+        <p class="xs muted" style="text-align:center;margin-top:12px">
+          Aapka data empty se shuru hoga. Jaise aap tasks add karenge waise progress badhega.
+        </p>
       </form>
     </div>`;
 
   $('#auth-form').addEventListener('submit', e => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    if (fd.get('sample')) {
-      seedSampleData();
-      S.user.name = fd.get('name') || S.user.name;
-      S.user.email = fd.get('email') || '';
-      S.user.course = fd.get('course') || S.user.course;
-      S.user.year = fd.get('year') || S.user.year;
-      S.user.mainGoal = fd.get('mainGoal') || S.user.mainGoal;
-    } else {
-      S = defaultState();
-      S.user = {
-        name: fd.get('name') || 'Student',
-        email: fd.get('email') || '',
-        course: fd.get('course') || '',
-        year: fd.get('year') || '',
-        mainGoal: fd.get('mainGoal') || '',
-        avatar: '🎓',
-        onboarded: true,
-      };
-    }
-    S.user.onboarded = true;
+    
+    // Always start with empty state
+    S = defaultState();
+    S.user = {
+      name: fd.get('name') || 'Student',
+      email: fd.get('email') || '',
+      course: fd.get('course') || '',
+      year: fd.get('year') || '',
+      mainGoal: fd.get('mainGoal') || '',
+      avatar: '🎓',
+      onboarded: true,
+    };
     save();
     bootApp();
   });
@@ -457,7 +365,6 @@ const ROUTES = {
   profile:      renderProfile,
   settings:     renderSettings,
 };
-const BOTTOM_NAV = ['home', 'calendar', 'goals', 'progress'];
 
 function currentRoute() {
   const h = location.hash.replace('#/', '').trim();
@@ -479,7 +386,6 @@ function render() {
   afterRender(route);
 }
 
-/* Post-render hooks */
 function afterRender(route) {
   if (route === 'focus') mountTimer();
   updateDrawerHeader();
@@ -509,7 +415,6 @@ function renderHome() {
   const studyMins = studyMinutesOn(t);
   const streak = computeStreak();
 
-  // Upcoming (next 5 events today)
   const nowM = minutesOf(nowHM());
   const upcoming = [];
   routines.forEach(r => {
@@ -523,9 +428,9 @@ function renderHome() {
   });
   upcoming.sort((a, b) => a.time.localeCompare(b.time));
 
-  // Today's goal (first goal with a daily target)
   const activeGoal = S.goals.find(g => g.dailyTarget) || S.goals[0];
   const goalMinsToday = studyMins;
+  const isNewUser = S.tasks.length === 0 && S.goals.length === 0 && S.routines.length === 0;
 
   return `
     <div class="hero">
@@ -546,6 +451,14 @@ function renderHome() {
       </div>
     </div>
 
+    ${isNewUser ? `
+    <div class="card" style="text-align:center;padding:24px;border-color:rgba(108,140,255,.4);background:rgba(108,140,255,.08)">
+      <div style="font-size:42px">🎉</div>
+      <div style="font-size:17px;font-weight:800;margin-top:8px">Welcome to StudyMate!</div>
+      <div class="xs muted" style="margin-top:6px">Aapka app bilkul fresh hai. Chaliye pehla task add karte hain.</div>
+      <button class="btn primary" data-action="add-task" style="margin-top:14px">＋ Add First Task</button>
+    </div>` : ''}
+
     <div class="stat-grid">
       <div class="stat">
         <div class="v">${humanMinutes(studyMins)}</div>
@@ -564,7 +477,7 @@ function renderHome() {
       </div>
       ${allToday.length ? `<div class="tlist">
         ${allToday.slice(0, 8).map(taskRowHTML).join('')}
-      </div>` : `<div class="empty"><span class="big">🎉</span>No tasks for today.<br>Enjoy or add one!</div>`}
+      </div>` : `<div class="empty"><span class="big">📭</span>No tasks for today.<br>Tap "+ Add" to create one.</div>`}
     </div>
 
     <div class="card">
@@ -578,7 +491,7 @@ function renderHome() {
           <div class="up-line"></div>
           <div class="up-body">${u.icon} ${esc(u.label)}</div>
         </div>
-      `).join('') : `<div class="empty">Nothing left today 🌙</div>`}
+      `).join('') : `<div class="empty">Nothing scheduled today</div>`}
     </div>
 
     ${activeGoal ? `
@@ -613,7 +526,6 @@ function renderHome() {
   `;
 }
 
-/* Shared task row markup */
 function taskRowHTML(task) {
   const cat = CATEGORIES[task.category] || CATEGORIES.study;
   return `
@@ -649,7 +561,6 @@ function renderTasks() {
 
   list.sort((a, b) => (a.date + (a.time || '99:99')).localeCompare(b.date + (b.time || '99:99')));
 
-  // group by date
   const groups = {};
   list.forEach(x => { (groups[x.date] ||= []).push(x); });
 
@@ -724,7 +635,6 @@ function renderGoals() {
 
     ${S.goals.length ? S.goals.map(g => {
       const pct = goalProgress(g);
-      const expanded = ui.goalExpanded[g.id] !== false;
       const daysLeft = g.deadline ? daysBetween(todayISO(), g.deadline) : null;
       return `
         <div class="goal-card">
@@ -804,10 +714,9 @@ function renderReminders() {
                   : r.repeat === 'weekdays' ? 'Weekdays'
                   : r.repeat === 'weekly' ? 'Weekly'
                   : 'Selected days'}
-              ${r.days?.length && r.repeat === 'custom' ? ` (${r.days.map(d => DOW[d]).join(', ')})` : ''}
             </div>
           </div>
-          <button class="icon-btn" data-action="toggle-reminder" data-id="${r.id}" title="Enable/Disable">
+          <button class="icon-btn" data-action="toggle-reminder" data-id="${r.id}">
             ${r.enabled ? '🔔' : '🔕'}
           </button>
           <button class="icon-btn" data-action="edit-reminder" data-id="${r.id}">✏️</button>
@@ -818,7 +727,7 @@ function renderReminders() {
 }
 
 /* ================================================================
-   13. VIEW — SUBJECTS (Study Planner)
+   13. VIEW — SUBJECTS
    ================================================================ */
 function renderSubjects() {
   return `
@@ -885,11 +794,10 @@ const timer = {
   running: false,
   total: 25 * 60,
   remaining: 25 * 60,
-  mode: 'focus',      // focus | break
+  mode: 'focus',
   subjectId: '',
   topic: '',
   interval: null,
-  linkedGoalId: '',
 };
 
 function fmtClock(sec) {
@@ -957,10 +865,7 @@ function renderFocus() {
   `;
 }
 
-function mountTimer() {
-  // restore running UI
-  updateTimerUI();
-}
+function mountTimer() { updateTimerUI(); }
 
 function updateTimerUI() {
   const ring = $('#timerRing');
@@ -1011,9 +916,8 @@ function completeTimer() {
     });
     markActivity();
     save();
-    notify('✅ Focus session complete!', `${mins} minutes of ${timer.topic || 'study'} logged.`);
+    notify('✅ Focus session complete!', `${mins} minutes logged.`);
     toast(`✅ ${mins} min session logged`);
-    // switch to break
     timer.mode = 'break';
     timer.total = 5 * 60;
     timer.remaining = 5 * 60;
@@ -1034,7 +938,7 @@ function renderCalendar() {
   const y = ui.calYear, m = ui.calMonth;
   const first = new Date(y, m, 1);
   const startDow = first.getDay();
-  const weekStart = S.settings.weekStart; // 0 or 1
+  const weekStart = S.settings.weekStart;
   const lead = (startDow - weekStart + 7) % 7;
   const daysInMonth = new Date(y, m + 1, 0).getDate();
   const daysInPrev = new Date(y, m, 0).getDate();
@@ -1154,7 +1058,6 @@ function renderNotes() {
 function renderProgress() {
   const t = todayISO();
 
-  // Today's breakdown
   const dayTasks = tasksOn(t);
   const taskPct = dayTasks.length ? Math.round((dayTasks.filter(x => x.done).length / dayTasks.length) * 100) : 0;
 
@@ -1167,7 +1070,6 @@ function renderProgress() {
   const goalPct = S.goals.length
     ? Math.round(S.goals.reduce((a, g) => a + goalProgress(g), 0) / S.goals.length) : 0;
 
-  // Weekly chart (last 7 days)
   const week = [];
   for (let i = 6; i >= 0; i--) {
     const d = addDays(t, -i);
@@ -1175,17 +1077,15 @@ function renderProgress() {
     const donePct = dt.length ? (dt.filter(x => x.done).length / dt.length) * 100 : 0;
     const studyScore = clamp(studyMinutesOn(d) / 4, 0, 100);
     const score = Math.round(dt.length ? (donePct * 0.6 + studyScore * 0.4) : studyScore);
-    week.push({ date: d, score, minutes: studyMinutesOn(d) });
+    week.push({ date: d, score });
   }
 
-  const totalTasks = S.tasks.length;
   const doneTasks = S.tasks.filter(x => x.done).length;
   const missed = S.tasks.filter(x => !x.done && x.date < t).length;
   const totalStudy = S.sessions.reduce((a, s) => a + s.minutes, 0);
   const streak = computeStreak();
   const bestDay = week.reduce((a, b) => (b.score > a.score ? b : a), week[0]);
 
-  // subject-wise
   const subjTime = {};
   S.sessions.forEach(s => {
     const key = s.subjectId ? (getSubject(s.subjectId)?.name || 'Other') : 'General';
@@ -1395,7 +1295,7 @@ function renderSettings() {
     <div class="card" style="text-align:center">
       <div style="font-size:26px">🎓</div>
       <div style="font-weight:800;margin-top:6px">StudyMate</div>
-      <div class="xs muted" style="margin-top:4px">Version 1.0 · Offline-first</div>
+      <div class="xs muted" style="margin-top:4px">Version 1.0 · Fresh Start</div>
     </div>
   `;
 }
@@ -1412,10 +1312,8 @@ function updateDrawerHeader() {
 }
 
 /* ================================================================
-   22. MODALS — TASKS / ROUTINE / GOALS / REMINDERS / SUBJECTS / NOTES
+   22. MODALS
    ================================================================ */
-
-/* ---------- TASK ---------- */
 function taskModal(task) {
   const t = task || {
     title: '', desc: '', date: todayISO(), time: '', priority: 'medium',
@@ -1495,7 +1393,6 @@ function taskModal(task) {
   });
 }
 
-/* ---------- ROUTINE ---------- */
 function routineModal(item) {
   const r = item || {
     title: '', start: '08:00', end: '09:00', icon: '📌',
@@ -1550,7 +1447,6 @@ function routineModal(item) {
     },
   });
 
-  // wire day picker after modal is in DOM
   setTimeout(() => {
     const dp = $('#daypicker');
     if (!dp) return;
@@ -1565,7 +1461,6 @@ function routineModal(item) {
   }, 60);
 }
 
-/* ---------- GOAL ---------- */
 function goalModal(goal) {
   const g = goal || { title: '', desc: '', deadline: '', dailyTarget: 30, color: '#6c8cff' };
   openModal({
@@ -1613,7 +1508,6 @@ function goalModal(goal) {
   });
 }
 
-/* ---------- REMINDER ---------- */
 function reminderModal(rem) {
   const r = rem || { title: '', time: '09:00', date: todayISO(), repeat: 'none', days: [], enabled: true };
   let selDays = [...(r.days || [])];
@@ -1686,7 +1580,6 @@ function reminderModal(rem) {
   }, 60);
 }
 
-/* ---------- SUBJECT ---------- */
 function subjectModal() {
   const colors = ['#6c8cff','#8b5cf6','#06b6d4','#22c55e','#f59e0b','#ec4899','#14b8a6'];
   openModal({
@@ -1713,7 +1606,6 @@ function subjectModal() {
   });
 }
 
-/* ---------- NOTE ---------- */
 function noteModal(note) {
   const n = note || { title: '', content: '', pinned: false, tags: [] };
   openModal({
@@ -1740,7 +1632,6 @@ function noteModal(note) {
   });
 }
 
-/* ---------- PROFILE ---------- */
 function profileModal() {
   const u = S.user;
   const avatars = ['🎓','👨‍🎓','👩‍🎓','🚀','🧠','📚','⚡','🌟','🎯','🔥'];
@@ -1790,7 +1681,6 @@ function profileModal() {
   });
 }
 
-/* ---------- QUICK ADD SHEET ---------- */
 function quickAddSheet() {
   openModal({
     title: 'Quick Add',
@@ -1812,7 +1702,7 @@ function quickAddSheet() {
 function notify(title, body) {
   if (!('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
-  try { new Notification(title, { body, icon: undefined }); } catch {}
+  try { new Notification(title, { body }); } catch {}
 }
 
 async function enableNotifications() {
@@ -1824,15 +1714,12 @@ async function enableNotifications() {
   toast(S.settings.notify ? 'Notifications enabled 🔔' : 'Notifications blocked');
 }
 
-/* Periodic check for due reminders/tasks */
 function startNotificationLoop() {
   setInterval(() => {
     if (!S.settings.notify || Notification.permission !== 'granted') return;
     const t = todayISO();
-    const now = new Date();
     const nowM = minutesOf(nowHM());
 
-    // Reminders
     S.reminders.filter(r => r.enabled).forEach(r => {
       const applies = reminderAppliesToday(r, t);
       if (!applies) return;
@@ -1844,7 +1731,6 @@ function startNotificationLoop() {
       }
     });
 
-    // Tasks with reminders
     S.tasks.filter(x => !x.done && x.date === t && x.time && x.remind && x.remind !== 'none').forEach(x => {
       const due = minutesOf(x.time) - Number(x.remind);
       const key = `task:${x.id}:${t}`;
@@ -1854,7 +1740,6 @@ function startNotificationLoop() {
       }
     });
 
-    // Clean up old fired keys
     const todayKey = todayISO();
     Object.keys(S.fired).forEach(k => {
       if (!k.includes(todayKey)) delete S.fired[k];
@@ -1879,16 +1764,13 @@ document.addEventListener('click', e => {
   const navEl = e.target.closest('[data-nav]');
   const drawerNav = e.target.closest('[data-nav-drawer]');
 
-  /* ---- drawer navigation ---- */
   if (drawerNav) {
     closeDrawer();
     navigate(drawerNav.dataset.navDrawer);
     return;
   }
-  /* ---- any [data-nav] ---- */
   if (navEl && !el) { navigate(navEl.dataset.nav); return; }
 
-  /* ---- modal backdrop ---- */
   if (e.target.matches('[data-close-backdrop]')) { closeModal(); return; }
 
   if (!el) return;
@@ -1896,20 +1778,12 @@ document.addEventListener('click', e => {
   const id = el.dataset.id;
 
   switch (a) {
-    /* ---------- modal close ---------- */
     case 'close-modal': closeModal(); break;
-
-    /* ---------- drawer ---------- */
     case 'open-drawer': $('#drawer').classList.add('open'); break;
     case 'close-drawer': closeDrawer(); break;
-
-    /* ---------- theme ---------- */
     case 'toggle-theme': toggleTheme(); break;
-
-    /* ---------- navigation ---------- */
     case 'nav': navigate(el.dataset.view); break;
 
-    /* ---------- quick add ---------- */
     case 'quick-add': quickAddSheet(); break;
     case 'add-task': closeModal(); setTimeout(() => taskModal(), 260); break;
     case 'add-routine': closeModal(); setTimeout(() => routineModal(), 260); break;
@@ -1918,14 +1792,12 @@ document.addEventListener('click', e => {
     case 'add-note': closeModal(); setTimeout(() => noteModal(), 260); break;
     case 'add-subject': closeModal(); setTimeout(() => subjectModal(), 260); break;
 
-    /* ---------- tasks ---------- */
     case 'toggle-task': {
       const task = getTask(id);
       if (!task) break;
       task.done = !task.done;
       if (task.done) {
         markActivity();
-        // handle repeat
         if (task.repeat && task.repeat !== 'none') {
           const next = { ...task, id: uid(), done: false };
           next.date = task.repeat === 'daily' ? addDays(task.date, 1)
@@ -1940,7 +1812,6 @@ document.addEventListener('click', e => {
     case 'edit-task': taskModal(getTask(id)); break;
     case 'task-filter': ui.taskFilter = el.dataset.filter; render(); break;
 
-    /* ---------- routine ---------- */
     case 'toggle-routine': {
       const key = `${id}:${todayISO()}`;
       S.routineLog[key] = !S.routineLog[key];
@@ -1950,7 +1821,6 @@ document.addEventListener('click', e => {
     }
     case 'edit-routine': routineModal(getRoutine(id)); break;
 
-    /* ---------- goals ---------- */
     case 'edit-goal': goalModal(getGoal(id)); break;
     case 'toggle-milestone': {
       const g = getGoal(el.dataset.goal);
@@ -1994,7 +1864,6 @@ document.addEventListener('click', e => {
       break;
     }
 
-    /* ---------- reminders ---------- */
     case 'toggle-reminder': {
       const r = getReminder(id);
       r.enabled = !r.enabled;
@@ -2004,11 +1873,10 @@ document.addEventListener('click', e => {
     case 'edit-reminder': reminderModal(getReminder(id)); break;
     case 'enable-notify': enableNotifications(); break;
     case 'test-notify':
-      notify('🎓 StudyMate', 'This is a test notification. Everything works!');
+      notify('🎓 StudyMate', 'This is a test notification.');
       toast('Test notification sent');
       break;
 
-    /* ---------- subjects ---------- */
     case 'toggle-subject':
       ui.expandedSubjects[id] = !ui.expandedSubjects[id];
       render();
@@ -2084,7 +1952,6 @@ document.addEventListener('click', e => {
       navigate('focus');
       break;
 
-    /* ---------- focus timer ---------- */
     case 'timer-toggle':
       timer.running ? pauseTimer() : startTimer();
       break;
@@ -2102,7 +1969,6 @@ document.addEventListener('click', e => {
       break;
     }
 
-    /* ---------- calendar ---------- */
     case 'cal-prev':
       ui.calMonth--;
       if (ui.calMonth < 0) { ui.calMonth = 11; ui.calYear--; }
@@ -2118,7 +1984,6 @@ document.addEventListener('click', e => {
       render();
       break;
 
-    /* ---------- notes ---------- */
     case 'edit-note': noteModal(getNote(id)); break;
     case 'del-note':
       if (confirm('Delete this note?')) {
@@ -2133,7 +1998,6 @@ document.addEventListener('click', e => {
       break;
     }
 
-    /* ---------- profile & settings ---------- */
     case 'edit-profile': profileModal(); break;
     case 'toggle-weekstart':
       S.settings.weekStart = S.settings.weekStart === 1 ? 0 : 1;
@@ -2171,13 +2035,13 @@ document.addEventListener('click', e => {
         $('#shell').classList.add('hidden');
         renderAuth();
         $('#auth').classList.remove('hidden');
-        toast('All data cleared');
+        toast('All data cleared. Reloading...');
+        setTimeout(() => location.reload(), 800);
       }
       break;
   }
 });
 
-/* ---------- input/change delegation ---------- */
 document.addEventListener('input', e => {
   const el = e.target.closest('[data-action]');
   if (!el) return;
@@ -2205,7 +2069,6 @@ document.addEventListener('input', e => {
   if (e.target.id === 'focusTopic') timer.topic = e.target.value;
 });
 
-/* import file handler */
 document.addEventListener('change', e => {
   if (e.target.id !== 'importFile') return;
   const file = e.target.files[0];
@@ -2223,7 +2086,7 @@ document.addEventListener('change', e => {
 });
 
 /* ================================================================
-   25. HELPERS: theme, drawer, next weekday
+   25. HELPERS
    ================================================================ */
 function toggleTheme() {
   S.settings.theme = S.settings.theme === 'dark' ? 'light' : 'dark';
@@ -2241,19 +2104,18 @@ function nextWeekday(isoStr) {
 }
 
 /* ================================================================
-   26. BACKEND SYNC (Render API)
+   26. BACKEND SYNC
    ================================================================ */
-const API_URL = 'https://studymate-backend-5yvt.onrender.com';
+const API_URL = 'https://studymate-backend-5yvt.onrender.com'; // ⬅️ APNA RENDER URL
+
 async function syncWithBackend() {
   try {
     toast('Syncing... ⏳');
     const userId = S.user.email || 'defaultUser';
     let pushedCount = 0;
 
-    // 1. Push local tasks to backend
     for (const task of S.tasks) {
-      if (task.synced) continue; // Skip already synced tasks
-
+      if (task.synced) continue;
       try {
         const res = await fetch(`${API_URL}/api/tasks`, {
           method: 'POST',
@@ -2278,7 +2140,6 @@ async function syncWithBackend() {
       }
     }
 
-    // 2. Pull tasks from backend
     const res = await fetch(`${API_URL}/api/tasks?userId=${userId}`);
     const remoteTasks = await res.json();
     let pulledCount = 0;
@@ -2309,7 +2170,7 @@ async function syncWithBackend() {
     toast(`Synced! Pushed ${pushedCount}, Pulled ${pulledCount} ✅`);
   } catch (err) {
     console.error(err);
-    toast('Sync failed. Check internet or backend URL.');
+    toast('Sync failed. Check internet.');
   }
 }
 
