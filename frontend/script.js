@@ -48,6 +48,7 @@ function humanMinutes(mins) {
 
 function toast(msg, ms = 2200) {
   const el = $('#toast');
+  if (!el) return;
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(el._t);
@@ -118,7 +119,7 @@ const ui = {
 };
 
 /* ================================================================
-   3. SAMPLE DATA (only used from Settings → Load Sample Data)
+   3. SAMPLE DATA
    ================================================================ */
 function seedSampleData() {
   const t = todayISO();
@@ -292,7 +293,7 @@ function opts(list, selected, labels = {}) {
 }
 
 /* ================================================================
-   6. AUTH SCREEN (Fixed: No sample data, always empty start)
+   6. AUTH SCREEN
    ================================================================ */
 function renderAuth() {
   $('#auth').innerHTML = `
@@ -330,8 +331,6 @@ function renderAuth() {
   $('#auth-form').addEventListener('submit', e => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    
-    // Always start with empty state
     S = defaultState();
     S.user = {
       name: fd.get('name') || 'Student',
@@ -1760,6 +1759,18 @@ function reminderAppliesToday(r, dateISO) {
    24. GLOBAL EVENT DELEGATION
    ================================================================ */
 document.addEventListener('click', e => {
+  // ---- Modal close (X button, Cancel button) ----
+  if (e.target.closest('[data-close-modal]')) {
+    closeModal();
+    return;
+  }
+
+  // ---- Modal backdrop click ----
+  if (e.target.matches('[data-close-backdrop]')) {
+    closeModal();
+    return;
+  }
+
   const el = e.target.closest('[data-action]');
   const navEl = e.target.closest('[data-nav]');
   const drawerNav = e.target.closest('[data-nav-drawer]');
@@ -1771,14 +1782,11 @@ document.addEventListener('click', e => {
   }
   if (navEl && !el) { navigate(navEl.dataset.nav); return; }
 
-  if (e.target.matches('[data-close-backdrop]')) { closeModal(); return; }
-
   if (!el) return;
   const a = el.dataset.action;
   const id = el.dataset.id;
 
   switch (a) {
-    case 'close-modal': closeModal(); break;
     case 'open-drawer': $('#drawer').classList.add('open'); break;
     case 'close-drawer': closeDrawer(); break;
     case 'toggle-theme': toggleTheme(); break;
@@ -2054,301 +2062,35 @@ document.addEventListener('input', e => {
   }
 });
 document.addEventListener('change', e => {
-/* ================================================================
-   24. GLOBAL EVENT DELEGATION
-   ================================================================ */
-document.addEventListener('click', e => {
-  // ---- Modal close (X button, Cancel button) ----
-  if (e.target.closest('[data-close-modal]')) {
-    closeModal();
-    return;
-  }
-
-  // ---- Modal backdrop click ----
-  if (e.target.matches('[data-close-backdrop]')) {
-    closeModal();
-    return;
-  }
-
   const el = e.target.closest('[data-action]');
-  const navEl = e.target.closest('[data-nav]');
-  const drawerNav = e.target.closest('[data-nav-drawer]');
-
-  if (drawerNav) {
-    closeDrawer();
-    navigate(drawerNav.dataset.navDrawer);
-    return;
-  }
-  if (navEl && !el) { navigate(navEl.dataset.nav); return; }
-
   if (!el) return;
-  const a = el.dataset.action;
-  const id = el.dataset.id;
-
-  switch (a) {
-    case 'close-modal': closeModal(); break;
-
-    case 'open-drawer': $('#drawer').classList.add('open'); break;
-    case 'close-drawer': closeDrawer(); break;
-    case 'toggle-theme': toggleTheme(); break;
-    case 'nav': navigate(el.dataset.view); break;
-
-    case 'quick-add': quickAddSheet(); break;
-    case 'add-task': closeModal(); setTimeout(() => taskModal(), 260); break;
-    case 'add-routine': closeModal(); setTimeout(() => routineModal(), 260); break;
-    case 'add-goal': closeModal(); setTimeout(() => goalModal(), 260); break;
-    case 'add-reminder': closeModal(); setTimeout(() => reminderModal(), 260); break;
-    case 'add-note': closeModal(); setTimeout(() => noteModal(), 260); break;
-    case 'add-subject': closeModal(); setTimeout(() => subjectModal(), 260); break;
-
-    case 'toggle-task': {
-      const task = getTask(id);
-      if (!task) break;
-      task.done = !task.done;
-      if (task.done) {
-        markActivity();
-        if (task.repeat && task.repeat !== 'none') {
-          const next = { ...task, id: uid(), done: false };
-          next.date = task.repeat === 'daily' ? addDays(task.date, 1)
-                    : task.repeat === 'weekdays' ? nextWeekday(task.date)
-                    : addDays(task.date, 7);
-          S.tasks.push(next);
-        }
-      }
-      save(); render();
-      break;
-    }
-    case 'edit-task': taskModal(getTask(id)); break;
-    case 'task-filter': ui.taskFilter = el.dataset.filter; render(); break;
-
-    case 'toggle-routine': {
-      const key = `${id}:${todayISO()}`;
-      S.routineLog[key] = !S.routineLog[key];
-      if (S.routineLog[key]) markActivity();
-      save(); render();
-      break;
-    }
-    case 'edit-routine': routineModal(getRoutine(id)); break;
-
-    case 'edit-goal': goalModal(getGoal(id)); break;
-    case 'toggle-milestone': {
-      const g = getGoal(el.dataset.goal);
-      const m = g?.milestones.find(x => x.id === el.dataset.ms);
-      if (m) { m.done = !m.done; if (m.done) markActivity(); save(); render(); }
-      break;
-    }
-    case 'add-milestone': {
-      const g = getGoal(id);
-      openModal({
-        title: 'Add Milestone',
-        body: `<label>Milestone
-                 <input name="title" required placeholder="e.g. Exception Handling">
-               </label>`,
-        submit: 'Add',
-        onSubmit(fd) {
-          const title = fd.get('title').trim();
-          if (!title) return false;
-          g.milestones.push({ id: uid(), title, done: false });
-          save(); render(); toast('Milestone added');
-        },
-      });
-      break;
-    }
-    case 'del-milestone': {
-      const g = getGoal(el.dataset.goal);
-      g.milestones = g.milestones.filter(x => x.id !== el.dataset.ms);
-      save(); render();
-      break;
-    }
-    case 'del-goal':
-      if (confirm('Delete this goal? This cannot be undone.')) {
-        S.goals = S.goals.filter(g => g.id !== id);
-        save(); render(); toast('Goal deleted');
-      }
-      break;
-    case 'goal-focus': {
-      timer.subjectId = '';
-      timer.topic = getGoal(id)?.title || '';
-      navigate('focus');
-      break;
-    }
-
-    case 'toggle-reminder': {
-      const r = getReminder(id);
-      r.enabled = !r.enabled;
-      save(); render();
-      break;
-    }
-    case 'edit-reminder': reminderModal(getReminder(id)); break;
-    case 'enable-notify': enableNotifications(); break;
-    case 'test-notify':
-      notify('🎓 StudyMate', 'This is a test notification.');
-      toast('Test notification sent');
-      break;
-
-    case 'toggle-subject':
-      ui.expandedSubjects[id] = !ui.expandedSubjects[id];
-      render();
-      break;
-    case 'add-unit': {
-      const s = getSubject(id);
-      openModal({
-        title: 'Add Unit',
-        body: `<label>Unit name
-                 <input name="name" required placeholder="e.g. Unit 3 — Trees">
-               </label>`,
-        submit: 'Add Unit',
-        onSubmit(fd) {
-          const name = fd.get('name').trim();
-          if (!name) return false;
-          s.units.push({ id: uid(), name, topics: [] });
-          ui.expandedSubjects[s.id] = true;
-          save(); render();
-        },
-      });
-      break;
-    }
-    case 'del-unit': {
-      const s = getSubject(el.dataset.subject);
-      s.units = s.units.filter(u => u.id !== el.dataset.unit);
-      save(); render();
-      break;
-    }
-    case 'add-topic': {
-      const s = getSubject(el.dataset.subject);
-      const u = s.units.find(x => x.id === el.dataset.unit);
-      openModal({
-        title: 'Add Topic',
-        body: `<label>Topic name
-                 <input name="name" required placeholder="e.g. AVL Trees">
-               </label>`,
-        submit: 'Add Topic',
-        onSubmit(fd) {
-          const name = fd.get('name').trim();
-          if (!name) return false;
-          u.topics.push({ id: uid(), name, done: false });
-          save(); render();
-        },
-      });
-      break;
-    }
-    case 'toggle-topic': {
-      const s = getSubject(el.dataset.subject);
-      const u = s.units.find(x => x.id === el.dataset.unit);
-      const tp = u?.topics.find(x => x.id === el.dataset.topic);
-      if (tp) {
-        tp.done = !tp.done;
-        if (tp.done) markActivity();
-        save(); render();
-      }
-      break;
-    }
-    case 'del-topic': {
-      const s = getSubject(el.dataset.subject);
-      const u = s.units.find(x => x.id === el.dataset.unit);
-      u.topics = u.topics.filter(x => x.id !== el.dataset.topic);
-      save(); render();
-      break;
-    }
-    case 'del-subject':
-      if (confirm('Delete this subject and all its topics?')) {
-        S.subjects = S.subjects.filter(s => s.id !== id);
-        save(); render(); toast('Subject deleted');
-      }
-      break;
-    case 'subject-focus':
-      timer.subjectId = id;
-      navigate('focus');
-      break;
-
-    case 'timer-toggle':
-      timer.running ? pauseTimer() : startTimer();
-      break;
-    case 'timer-reset':
-      resetTimer();
-      break;
-    case 'timer-preset': {
-      pauseTimer();
-      const m = Number(el.dataset.min);
-      timer.mode = 'focus';
-      timer.total = m * 60;
-      timer.remaining = m * 60;
-      updateTimerUI();
-      toast(`Set to ${m} minutes`);
-      break;
-    }
-
-    case 'cal-prev':
-      ui.calMonth--;
-      if (ui.calMonth < 0) { ui.calMonth = 11; ui.calYear--; }
-      render();
-      break;
-    case 'cal-next':
-      ui.calMonth++;
-      if (ui.calMonth > 11) { ui.calMonth = 0; ui.calYear++; }
-      render();
-      break;
-    case 'cal-select':
-      ui.calSelected = el.dataset.date;
-      render();
-      break;
-
-    case 'edit-note': noteModal(getNote(id)); break;
-    case 'del-note':
-      if (confirm('Delete this note?')) {
-        S.notes = S.notes.filter(n => n.id !== id);
-        save(); render();
-      }
-      break;
-    case 'pin-note': {
-      const n = getNote(id);
-      n.pinned = !n.pinned;
-      save(); render();
-      break;
-    }
-
-    case 'edit-profile': profileModal(); break;
-    case 'toggle-weekstart':
-      S.settings.weekStart = S.settings.weekStart === 1 ? 0 : 1;
-      save(); render();
-      break;
-    case 'sync-backend': syncWithBackend(); break;
-    case 'export-data': {
-      const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a2 = document.createElement('a');
-      a2.href = url;
-      a2.download = `studymate-backup-${todayISO()}.json`;
-      a2.click();
-      URL.revokeObjectURL(url);
-      toast('Backup downloaded ⬇️');
-      break;
-    }
-    case 'import-data':
-      $('#importFile').click();
-      break;
-    case 'load-sample':
-      if (confirm('Load sample data? This will replace your current data.')) {
-        S = defaultState();
-        seedSampleData();
-        save(); render(); updateDrawerHeader();
-        toast('Sample data loaded 🎲');
-      }
-      break;
-    case 'reset-data':
-      if (confirm('Delete ALL data? This cannot be undone.')) {
-        localStorage.removeItem(STORAGE_KEY);
-        S = defaultState();
-        save();
-        location.hash = '';
-        $('#shell').classList.add('hidden');
-        renderAuth();
-        $('#auth').classList.remove('hidden');
-        toast('All data cleared. Reloading...');
-        setTimeout(() => location.reload(), 800);
-      }
-      break;
+  switch (el.dataset.action) {
+    case 'focus-subject':
+      timer.subjectId = el.value; break;
+    case 'set-daystart':
+      S.settings.dayStart = el.value; save(); break;
+    case 'set-dayend':
+      S.settings.dayEnd = el.value; save(); break;
   }
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'focusTopic') timer.topic = e.target.value;
+});
+
+document.addEventListener('change', e => {
+  if (e.target.id !== 'importFile') return;
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      S = Object.assign(defaultState(), data);
+      save(); render(); updateDrawerHeader();
+      toast('Data imported ✅');
+    } catch { toast('Invalid backup file'); }
+  };
+  reader.readAsText(file);
 });
 
 /* ================================================================
@@ -2372,7 +2114,7 @@ function nextWeekday(isoStr) {
 /* ================================================================
    26. BACKEND SYNC
    ================================================================ */
-const API_URL = 'https://studymate-backend-5yvt.onrender.com'; // ⬅️ APNA RENDER URL
+const API_URL = 'https://studymate-backend-5vyt.onrender.com'; // ⬅️ APNA RENDER URL YAHAN
 
 async function syncWithBackend() {
   try {
