@@ -2243,8 +2243,7 @@ function nextWeekday(isoStr) {
 /* ================================================================
    26. BACKEND SYNC (Render API)
    ================================================================ */
-const API_URL = 'https://studymate-backend.onrender.com'; // ⬅️ REPLACE THIS WITH YOUR REAL RENDER URL
-
+const API_URL = 'https://studymate-backend-5yvt.onrender.com';
 async function syncWithBackend() {
   try {
     toast('Syncing... ⏳');
