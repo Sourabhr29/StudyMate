@@ -85,6 +85,90 @@ app.delete('/api/tasks/:id', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+// --- Goal Model ---
+const goalSchema = new mongoose.Schema({
+  userId: { type: String, default: 'defaultUser' },
+  title: { type: String, required: true },
+  desc: String,
+  deadline: String,
+  dailyTarget: Number,
+  color: String,
+  milestones: [{ id: String, title: String, done: Boolean }],
+  createdAt: { type: Date, default: Date.now }
+});
+const Goal = mongoose.model('Goal', goalSchema);
+
+// --- Routine Model ---
+const routineSchema = new mongoose.Schema({
+  userId: { type: String, default: 'defaultUser' },
+  title: { type: String, required: true },
+  start: String,
+  end: String,
+  icon: String,
+  category: String,
+  days: [Number],
+  createdAt: { type: Date, default: Date.now }
+});
+const Routine = mongoose.model('Routine', routineSchema);
+
+// --- Note Model ---
+const noteSchema = new mongoose.Schema({
+  userId: { type: String, default: 'defaultUser' },
+  title: { type: String, required: true },
+  content: String,
+  pinned: { type: Boolean, default: false },
+  tags: [String],
+  createdAt: { type: Date, default: Date.now }
+});
+const Note = mongoose.model('Note', noteSchema);
+
+// ==================== GOALS ROUTES ====================
+app.get('/api/goals', async (req, res) => {
+  try {
+    const goals = await Goal.find({ userId: req.query.userId || 'defaultUser' });
+    res.json(goals);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.post('/api/goals', async (req, res) => {
+  try {
+    const goal = new Goal({ ...req.body, userId: req.body.userId || 'defaultUser' });
+    const saved = await goal.save();
+    res.status(201).json(saved);
+  } catch (err) { res.status(400).json({ message: err.message }); }
+});
+
+// ==================== ROUTINES ROUTES ====================
+app.get('/api/routines', async (req, res) => {
+  try {
+    const routines = await Routine.find({ userId: req.query.userId || 'defaultUser' });
+    res.json(routines);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.post('/api/routines', async (req, res) => {
+  try {
+    const routine = new Routine({ ...req.body, userId: req.body.userId || 'defaultUser' });
+    const saved = await routine.save();
+    res.status(201).json(saved);
+  } catch (err) { res.status(400).json({ message: err.message }); }
+});
+
+// ==================== NOTES ROUTES ====================
+app.get('/api/notes', async (req, res) => {
+  try {
+    const notes = await Note.find({ userId: req.query.userId || 'defaultUser' });
+    res.json(notes);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.post('/api/notes', async (req, res) => {
+  try {
+    const note = new Note({ ...req.body, userId: req.body.userId || 'defaultUser' });
+    const saved = await note.save();
+    res.status(201).json(saved);
+  } catch (err) { res.status(400).json({ message: err.message }); }
+});
 
 // Start server
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
