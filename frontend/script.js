@@ -1384,6 +1384,7 @@ function renderSettings() {
 
     <div class="card">
       <div class="card-title" style="margin-bottom:10px">Data</div>
+      <button class="btn block primary" data-action="sync-backend" style="margin-bottom:9px">☁️ Sync with Cloud</button>
       <button class="btn block" data-action="export-data" style="margin-bottom:9px">⬇️ Export Data (JSON)</button>
       <button class="btn block" data-action="import-data" style="margin-bottom:9px">⬆️ Import Data</button>
       <button class="btn block" data-action="load-sample" style="margin-bottom:9px">🎲 Load Sample Data</button>
@@ -2138,6 +2139,7 @@ document.addEventListener('click', e => {
       S.settings.weekStart = S.settings.weekStart === 1 ? 0 : 1;
       save(); render();
       break;
+    case 'sync-backend': syncWithBackend(); break;
     case 'export-data': {
       const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -2181,8 +2183,6 @@ document.addEventListener('input', e => {
   if (!el) return;
   if (el.dataset.action === 'note-search') {
     ui.noteQuery = el.value;
-    // re-render only the list portion without losing focus is complex;
-    // simplest: re-render and restore focus
     const pos = el.selectionStart;
     render();
     const next = $('#noteSearch');
@@ -2240,18 +2240,6 @@ function nextWeekday(isoStr) {
   return d;
 }
 
-/* ================================================================
-   26. BOOT
-   ================================================================ */
-function bootApp() {
-  $('#auth').classList.add('hidden');
-  $('#shell').classList.remove('hidden');
-  document.documentElement.setAttribute('data-theme', S.settings.theme);
-  if (!location.hash) location.hash = '#/home';
-  updateDrawerHeader();
-  render();
-  checkAchievements();
-}
 /* ================================================================
    26. BACKEND SYNC (Render API)
    ================================================================ */
@@ -2324,6 +2312,19 @@ async function syncWithBackend() {
     console.error(err);
     toast('Sync failed. Check internet or backend URL.');
   }
+}
+
+/* ================================================================
+   27. BOOT
+   ================================================================ */
+function bootApp() {
+  $('#auth').classList.add('hidden');
+  $('#shell').classList.remove('hidden');
+  document.documentElement.setAttribute('data-theme', S.settings.theme);
+  if (!location.hash) location.hash = '#/home';
+  updateDrawerHeader();
+  render();
+  checkAchievements();
 }
 
 function init() {
