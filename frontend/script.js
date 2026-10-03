@@ -1717,33 +1717,45 @@ function startNotificationLoop() {
     if (!S.settings.notify || Notification.permission !== 'granted') return;
     const t = todayISO();
     const nowM = minutesOf(nowHM());
+    const todayKey = todayISO();
 
+    // Check reminders
     S.reminders.filter(r => r.enabled).forEach(r => {
       const applies = reminderAppliesToday(r, t);
       if (!applies) return;
+
       const due = minutesOf(r.time);
       const key = `rem:${r.id}:${t}:${r.time}`;
-      if (nowM >= due && nowM < due + 2 && !S.fired[key]) {
-        S.fired[key] = true; save();
+
+      // Fire if:
+      // 1. Current time is past reminder time
+      // 2. Reminder time was in the last 30 minutes (missed reminders)
+      // 3. Not already fired today
+      if (nowM >= due && (nowM - due) <= 30 && !S.fired[key]) {
+        S.fired[key] = true;
+        save();
         notify('🔔 ' + r.title, `Scheduled for ${fmtTime(r.time)}`);
       }
     });
 
+    // Check tasks with reminders
     S.tasks.filter(x => !x.done && x.date === t && x.time && x.remind && x.remind !== 'none').forEach(x => {
       const due = minutesOf(x.time) - Number(x.remind);
       const key = `task:${x.id}:${t}`;
-      if (nowM >= due && nowM < due + 2 && !S.fired[key]) {
-        S.fired[key] = true; save();
+
+      if (nowM >= due && (nowM - due) <= 30 && !S.fired[key]) {
+        S.fired[key] = true;
+        save();
         notify('⏰ ' + x.title, `Starts at ${fmtTime(x.time)}`);
       }
     });
 
-    const todayKey = todayISO();
+    // Clean up old fired keys (older than today)
     Object.keys(S.fired).forEach(k => {
       if (!k.includes(todayKey)) delete S.fired[k];
     });
-  }, 30000);
-}
+  }, 15000); // Check every 15 seconds instead of 30
+     }
 
 function reminderAppliesToday(r, dateISO) {
   if (r.repeat === 'none')   return r.date === dateISO;
