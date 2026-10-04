@@ -1697,19 +1697,28 @@ function quickAddSheet() {
 /* ================================================================
    23. NOTIFICATIONS
    ================================================================ */
-function notify(title, body) {
+async function notify(title, body) {
   if (!('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
-  try { new Notification(title, { body }); } catch {}
-}
 
-async function enableNotifications() {
-  if (!('Notification' in window)) { toast('Notifications not supported'); return; }
-  const perm = await Notification.requestPermission();
-  S.settings.notify = perm === 'granted';
-  save();
-  render();
-  toast(S.settings.notify ? 'Notifications enabled 🔔' : 'Notifications blocked');
+  try {
+    // Android Chrome me sirf Service Worker ke through notification aati hai
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, {
+        body: body,
+        vibrate: [200, 100, 200],
+        tag: 'studymate-' + Date.now()
+      });
+      return;
+    }
+
+    // Desktop fallback
+    new Notification(title, { body });
+  } catch (e) {
+    console.error('Notification failed:', e);
+    try { new Notification(title, { body }); } catch {}
+  }
 }
 
 function startNotificationLoop() {
