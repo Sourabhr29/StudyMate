@@ -1727,10 +1727,6 @@ function startNotificationLoop() {
       const due = minutesOf(r.time);
       const key = `rem:${r.id}:${t}:${r.time}`;
 
-      // Fire if:
-      // 1. Current time is past reminder time
-      // 2. Reminder time was in the last 30 minutes (missed reminders)
-      // 3. Not already fired today
       if (nowM >= due && (nowM - due) <= 30 && !S.fired[key]) {
         S.fired[key] = true;
         save();
@@ -1750,12 +1746,12 @@ function startNotificationLoop() {
       }
     });
 
-    // Clean up old fired keys (older than today)
+    // Clean up old fired keys
     Object.keys(S.fired).forEach(k => {
       if (!k.includes(todayKey)) delete S.fired[k];
     });
-  }, 15000); // Check every 15 seconds instead of 30
-     }
+  }, 15000);
+}
 
 function reminderAppliesToday(r, dateISO) {
   if (r.repeat === 'none')   return r.date === dateISO;
@@ -2114,9 +2110,9 @@ function nextWeekday(isoStr) {
 }
 
 /* ================================================================
-   26. FULL BACKEND SYNC (Tasks + Goals + Routines + Notes)
+   26. FULL BACKEND SYNC
    ================================================================ */
-const API_URL = 'https://studymate-backend-5vyt.onrender.com'; // ⬅️ APNA RENDER URL YAHAN
+const API_URL = 'https://studymate-backend-5vyt.onrender.com';
 
 async function syncWithBackend() {
   try {
@@ -2125,7 +2121,7 @@ async function syncWithBackend() {
     let pushedCount = 0;
     let pulledCount = 0;
 
-    // ========== PUSH: Tasks ==========
+    // PUSH: Tasks
     for (const task of S.tasks) {
       if (task.synced) continue;
       try {
@@ -2142,7 +2138,7 @@ async function syncWithBackend() {
       } catch (e) { console.error('Task push error:', e); }
     }
 
-    // ========== PUSH: Goals ==========
+    // PUSH: Goals
     for (const goal of S.goals) {
       if (goal.synced) continue;
       try {
@@ -2159,7 +2155,7 @@ async function syncWithBackend() {
       } catch (e) { console.error('Goal push error:', e); }
     }
 
-    // ========== PUSH: Routines ==========
+    // PUSH: Routines
     for (const routine of S.routines) {
       if (routine.synced) continue;
       try {
@@ -2175,7 +2171,7 @@ async function syncWithBackend() {
       } catch (e) { console.error('Routine push error:', e); }
     }
 
-    // ========== PUSH: Notes ==========
+    // PUSH: Notes
     for (const note of S.notes) {
       if (note.synced) continue;
       try {
@@ -2191,7 +2187,7 @@ async function syncWithBackend() {
       } catch (e) { console.error('Note push error:', e); }
     }
 
-    // ========== PULL: Tasks ==========
+    // PULL: Tasks
     const tRes = await fetch(`${API_URL}/api/tasks?userId=${userId}`);
     const remoteTasks = await tRes.json();
     if (Array.isArray(remoteTasks)) {
@@ -2209,7 +2205,7 @@ async function syncWithBackend() {
       });
     }
 
-    // ========== PULL: Goals ==========
+    // PULL: Goals
     const gRes = await fetch(`${API_URL}/api/goals?userId=${userId}`);
     const remoteGoals = await gRes.json();
     if (Array.isArray(remoteGoals)) {
@@ -2227,7 +2223,7 @@ async function syncWithBackend() {
       });
     }
 
-    // ========== PULL: Routines ==========
+    // PULL: Routines
     const rRes = await fetch(`${API_URL}/api/routines?userId=${userId}`);
     const remoteRoutines = await rRes.json();
     if (Array.isArray(remoteRoutines)) {
@@ -2244,7 +2240,7 @@ async function syncWithBackend() {
       });
     }
 
-    // ========== PULL: Notes ==========
+    // PULL: Notes
     const nRes = await fetch(`${API_URL}/api/notes?userId=${userId}`);
     const remoteNotes = await nRes.json();
     if (Array.isArray(remoteNotes)) {
