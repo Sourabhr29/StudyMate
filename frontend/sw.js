@@ -29,7 +29,7 @@ self.addEventListener('fetch', e => {
   );
 });
 
-/* ========== Handle notification clicks ========== */
+/* Handle notification clicks */
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(
