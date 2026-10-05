@@ -1549,9 +1549,12 @@ function reminderModal(rem) {
              : repeat === 'weekdays' ? [1,2,3,4,5]
              : repeat === 'weekly' ? [parseISO(fd.get('date')).getDay()]
              : [],
-        enabled: true,
+        enabled: rem ? rem.enabled : true,
       };
-      if (!data.title) return false;
+      if (!data.title || !data.time) {
+        toast('Please enter a title and time.');
+        return false;
+      }
       if (rem) Object.assign(rem, data);
       else S.reminders.push({ id: uid(), ...data });
       save();
@@ -1695,81 +1698,211 @@ function quickAddSheet() {
 }
 
 /* ================================================================
-   23. NOTIFICATIONS
+   23. NOTIFICATIONS — COMPLETE FIX
    ================================================================ */
-async function notify(title, body) {
-  if (!('Notification' in window)) return;
-  if (Notification.permission !== 'granted') return;
+let notificationTimer = null;
+
+function notificationSupported() {
+  return (
+    'Notification' in window &&
+    window.isSecureContext
+  );
+}
+
+async function enableNotifications() {
+  if (!('Notification' in window)) {
+    toast('This browser does not support notifications.');
+    return false;
+  }
+
+  if (!window.isSecureContext) {
+    toast('Open StudyMate using its HTTPS website.');
+    return false;
+  }
 
   try {
-    // Android Chrome me sirf Service Worker ke through notification aati hai
-    if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification(title, {
-        body: body,
-        vibrate: [200, 100, 200],
-        tag: 'studymate-' + Date.now()
-      });
-      return;
+    let permission = Notification.permission;
+
+    if (permission === 'default') {
+      permission = await Notification.requestPermission();
     }
 
-    // Desktop fallback
-    new Notification(title, { body });
-  } catch (e) {
-    console.error('Notification failed:', e);
-    try { new Notification(title, { body }); } catch {}
+    if (permission !== 'granted') {
+      S.settings.notify = false;
+      save();
+
+      toast(
+        permission === 'denied'
+          ? 'Notifications blocked. Allow them in browser settings.'
+          : 'Notification permission was not granted.'
+      );
+
+      render();
+      return false;
+    }
+
+    S.settings.notify = true;
+    save();
+
+    startNotificationLoop();
+
+    const sent = await notify(
+      '🎓 StudyMate',
+      'Notifications are enabled successfully!'
+    );
+
+    render();
+
+    if (sent) {
+      toast('🔔 Notifications enabled!');
+    } else {
+      toast('Permission enabled, but test notification failed.');
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Enable notification error:', error);
+    toast('Could not enable notifications.');
+    return false;
   }
 }
 
+async function notify(title, body) {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission !== 'granted') return false;
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+
+      if (registration?.showNotification) {
+        await registration.showNotification(title, {
+          body: body,
+          tag: 'studymate-' + Date.now(),
+          renotify: true,
+          vibrate: [200, 100, 200]
+        });
+        return true;
+      }
+    }
+
+    new Notification(title, {
+      body: body,
+      tag: 'studymate-' + Date.now()
+    });
+    return true;
+  } catch (error) {
+    console.error('Notification failed:', error);
+    return false;
+  }
+}
+
+function reminderAppliesToday(reminder, dateISO) {
+  const repeat = reminder.repeat || 'none';
+  const currentDay = parseISO(dateISO).getDay();
+
+  if (repeat === 'none') return reminder.date === dateISO;
+  if (repeat === 'daily') return true;
+  if (repeat === 'weekdays') return [1, 2, 3, 4, 5].includes(currentDay);
+  if (repeat === 'weekly') {
+    if (!reminder.date) return false;
+    return parseISO(dateISO).getDay() === parseISO(reminder.date).getDay();
+  }
+  if (repeat === 'custom') return (reminder.days || []).includes(currentDay);
+  return false;
+}
+
+function checkDueNotifications() {
+  if (!('Notification' in window)) return;
+  if (!S.settings.notify) return;
+
+  if (Notification.permission !== 'granted') {
+    S.settings.notify = false;
+    save();
+    return;
+  }
+
+  const today = todayISO();
+  const currentMinutes = minutesOf(nowHM());
+
+  /* Regular reminders */
+  S.reminders
+    .filter(reminder => reminder.enabled && reminder.time)
+    .forEach(reminder => {
+      if (!reminderAppliesToday(reminder, today)) return;
+
+      const dueMinutes = minutesOf(reminder.time);
+      const key = `rem:${reminder.id}:${today}:${reminder.time}`;
+
+      if (
+        currentMinutes >= dueMinutes &&
+        currentMinutes - dueMinutes <= 30 &&
+        !S.fired[key]
+      ) {
+        S.fired[key] = true;
+        save();
+        notify('🔔 ' + reminder.title, 'Scheduled for ' + fmtTime(reminder.time));
+      }
+    });
+
+  /* Task reminders */
+  S.tasks
+    .filter(task =>
+      !task.done &&
+      task.date === today &&
+      task.time &&
+      task.remind &&
+      task.remind !== 'none'
+    )
+    .forEach(task => {
+      const minutesBefore = Number(task.remind);
+      if (!Number.isFinite(minutesBefore)) return;
+
+      const dueMinutes = minutesOf(task.time) - minutesBefore;
+      const key = `task:${task.id}:${today}:${task.remind}`;
+
+      if (
+        currentMinutes >= dueMinutes &&
+        currentMinutes - dueMinutes <= 30 &&
+        !S.fired[key]
+      ) {
+        S.fired[key] = true;
+        save();
+        notify('⏰ ' + task.title, 'Starts at ' + fmtTime(task.time));
+      }
+    });
+
+  /* Remove fired records from previous dates */
+  Object.keys(S.fired).forEach(key => {
+    const dateMatch = key.match(/\d{4}-\d{2}-\d{2}/);
+    if (dateMatch && dateMatch[0] !== today) {
+      delete S.fired[key];
+    }
+  });
+
+  save();
+}
+
 function startNotificationLoop() {
-  setInterval(() => {
-    if (!S.settings.notify || Notification.permission !== 'granted') return;
-    const t = todayISO();
-    const nowM = minutesOf(nowHM());
-    const todayKey = todayISO();
+  if (notificationTimer !== null) return;
 
-    // Check reminders
-    S.reminders.filter(r => r.enabled).forEach(r => {
-      const applies = reminderAppliesToday(r, t);
-      if (!applies) return;
+  checkDueNotifications();
 
-      const due = minutesOf(r.time);
-      const key = `rem:${r.id}:${t}:${r.time}`;
-
-      if (nowM >= due && (nowM - due) <= 30 && !S.fired[key]) {
-        S.fired[key] = true;
-        save();
-        notify('🔔 ' + r.title, `Scheduled for ${fmtTime(r.time)}`);
-      }
-    });
-
-    // Check tasks with reminders
-    S.tasks.filter(x => !x.done && x.date === t && x.time && x.remind && x.remind !== 'none').forEach(x => {
-      const due = minutesOf(x.time) - Number(x.remind);
-      const key = `task:${x.id}:${t}`;
-
-      if (nowM >= due && (nowM - due) <= 30 && !S.fired[key]) {
-        S.fired[key] = true;
-        save();
-        notify('⏰ ' + x.title, `Starts at ${fmtTime(x.time)}`);
-      }
-    });
-
-    // Clean up old fired keys
-    Object.keys(S.fired).forEach(k => {
-      if (!k.includes(todayKey)) delete S.fired[k];
-    });
+  notificationTimer = setInterval(() => {
+    checkDueNotifications();
   }, 15000);
 }
 
-function reminderAppliesToday(r, dateISO) {
-  if (r.repeat === 'none')   return r.date === dateISO;
-  if (r.repeat === 'daily')  return true;
-  if (r.repeat === 'weekdays') return [1,2,3,4,5].includes(parseISO(dateISO).getDay());
-  if (r.repeat === 'weekly') return parseISO(dateISO).getDay() === parseISO(r.date).getDay();
-  if (r.repeat === 'custom') return (r.days || []).includes(parseISO(dateISO).getDay());
-  return false;
-}
+/* Check again when the user returns to the app */
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    checkDueNotifications();
+  }
+});
+
+window.addEventListener('focus', () => {
+  checkDueNotifications();
+});
 
 /* ================================================================
    24. GLOBAL EVENT DELEGATION
@@ -1886,10 +2019,30 @@ document.addEventListener('click', e => {
       break;
     }
     case 'edit-reminder': reminderModal(getReminder(id)); break;
-    case 'enable-notify': enableNotifications(); break;
+
+    case 'enable-notify':
+      enableNotifications();
+      break;
+
     case 'test-notify':
-      notify('🎓 StudyMate', 'This is a test notification.');
-      toast('Test notification sent');
+      if (
+        !('Notification' in window) ||
+        Notification.permission !== 'granted' ||
+        !S.settings.notify
+      ) {
+        enableNotifications();
+      } else {
+        notify(
+          '🎓 StudyMate',
+          'This is a test notification.'
+        ).then(sent => {
+          toast(
+            sent
+              ? 'Test notification sent!'
+              : 'Test notification failed. Check browser settings.'
+          );
+        });
+      }
       break;
 
     case 'toggle-subject':
@@ -2286,6 +2439,9 @@ function bootApp() {
   updateDrawerHeader();
   render();
   checkAchievements();
+
+  // Start reminders after app opens or onboarding finishes
+  startNotificationLoop();
 }
 
 function init() {
@@ -2296,7 +2452,6 @@ function init() {
     return;
   }
   bootApp();
-  startNotificationLoop();
 }
 
 window.addEventListener('hashchange', () => {
