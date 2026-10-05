@@ -4,10 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#0f1115" />
+<meta name="description" content="StudyMate — Student Daily Planner with tasks, goals, routines, reminders, notes, and focus timer." />
 <title>StudyMate — Student Daily Planner</title>
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjIwIiBmaWxsPSIjNmM4Y2ZmIi8+PHRleHQgeD0iNTAiIHk9IjUwIiBmb250LXNpemU9IjUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjM1ZW0iPvCfjJ08L3RleHQ+PC9zdmc+">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="StudyMate">
 </head>
 <body>
 
@@ -61,10 +65,19 @@
 <div id="modal-root"></div>
 <div id="toast" class="toast"></div>
 
-<script src="script.js">
+<!-- Main app script -->
+<script src="script.js"></script>
+
+<!-- Service Worker registration (MUST be separate from script.js) -->
+<script>
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js');
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => console.log('✅ SW registered:', reg.scope))
+        .catch(err => console.error('❌ SW failed:', err));
+    });
   }
 </script>
+
 </body>
 </html>
