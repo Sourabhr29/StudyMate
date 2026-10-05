@@ -1698,9 +1698,61 @@ function quickAddSheet() {
 }
 
 /* ================================================================
-   23. NOTIFICATIONS — COMPLETE FIX
+   23. NOTIFICATIONS — FINAL ANDROID FIX
    ================================================================ */
+
 let notificationTimer = null;
+let studyMateSW = null;
+
+
+/* ================================================================
+   SERVICE WORKER REGISTRATION
+   ================================================================ */
+
+async function registerStudyMateServiceWorker() {
+  if (!('serviceWorker' in navigator)) {
+    console.warn('Service Worker is not supported.');
+    return null;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.register(
+      '/sw.js',
+      { scope: '/' }
+    );
+
+    console.log(
+      'StudyMate Service Worker registered:',
+      registration.scope
+    );
+
+    studyMateSW = registration;
+
+    if (registration.active) {
+      return registration;
+    }
+
+    await navigator.serviceWorker.ready;
+
+    studyMateSW = await navigator.serviceWorker.getRegistration('/');
+
+    return studyMateSW;
+
+  } catch (error) {
+    console.error(
+      'Service Worker registration failed:',
+      error
+    );
+
+    studyMateSW = null;
+    return null;
+  }
+}
+
+
+/* ================================================================
+   NOTIFICATION SUPPORT
+   ================================================================ */
 
 function notificationSupported() {
   return (
@@ -1709,35 +1761,58 @@ function notificationSupported() {
   );
 }
 
+
+/* ================================================================
+   ENABLE NOTIFICATIONS
+   ================================================================ */
+
 async function enableNotifications() {
+
   if (!('Notification' in window)) {
-    toast('This browser does not support notifications.');
+    toast(
+      'This browser does not support notifications.'
+    );
     return false;
   }
 
   if (!window.isSecureContext) {
-    toast('Open StudyMate using its HTTPS website.');
+    toast(
+      'Open StudyMate using the HTTPS Render URL.'
+    );
     return false;
   }
 
   try {
+    await registerStudyMateServiceWorker();
+
     let permission = Notification.permission;
 
     if (permission === 'default') {
       permission = await Notification.requestPermission();
     }
 
+    console.log(
+      'Notification permission:',
+      permission
+    );
+
     if (permission !== 'granted') {
+
       S.settings.notify = false;
       save();
 
-      toast(
-        permission === 'denied'
-          ? 'Notifications blocked. Allow them in browser settings.'
-          : 'Notification permission was not granted.'
-      );
+      if (permission === 'denied') {
+        toast(
+          '❌ Notifications are blocked. Allow them in Chrome settings.'
+        );
+      } else {
+        toast(
+          'Notification permission was not granted.'
+        );
+      }
 
       render();
+
       return false;
     }
 
@@ -1746,163 +1821,452 @@ async function enableNotifications() {
 
     startNotificationLoop();
 
-    const sent = await notify(
+    const success = await notify(
       '🎓 StudyMate',
-      'Notifications are enabled successfully!'
+      'Notifications are working successfully!'
     );
 
     render();
 
-    if (sent) {
-      toast('🔔 Notifications enabled!');
+    if (success) {
+      toast('🔔 Notifications enabled successfully!');
     } else {
-      toast('Permission enabled, but test notification failed.');
+      toast(
+        'Permission is enabled, but notification could not be sent.'
+      );
     }
 
-    return true;
+    return success;
+
   } catch (error) {
-    console.error('Enable notification error:', error);
-    toast('Could not enable notifications.');
+
+    console.error(
+      'Enable notification error:',
+      error
+    );
+
+    toast(
+      'Could not enable notifications.'
+    );
+
     return false;
   }
 }
+
+
+/* ================================================================
+   SEND NOTIFICATION
+   ================================================================ */
 
 async function notify(title, body) {
-  if (!('Notification' in window)) return false;
-  if (Notification.permission !== 'granted') return false;
+
+  if (!('Notification' in window)) {
+    console.error(
+      'Notification API not available.'
+    );
+
+    return false;
+  }
+
+  if (Notification.permission !== 'granted') {
+
+    console.warn(
+      'Notification permission:',
+      Notification.permission
+    );
+
+    return false;
+  }
 
   try {
-    if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.getRegistration();
 
-      if (registration?.showNotification) {
-        await registration.showNotification(title, {
-          body: body,
-          tag: 'studymate-' + Date.now(),
-          renotify: true,
-          vibrate: [200, 100, 200]
-        });
-        return true;
-      }
+    let registration = studyMateSW;
+
+    if (!registration && 'serviceWorker' in navigator) {
+
+      registration =
+        await navigator.serviceWorker.getRegistration('/');
+
     }
 
-    new Notification(title, {
-      body: body,
-      tag: 'studymate-' + Date.now()
-    });
-    return true;
+    if (!registration) {
+
+      registration =
+        await registerStudyMateServiceWorker();
+
+    }
+
+    if (
+      registration &&
+      typeof registration.showNotification === 'function'
+    ) {
+
+      await registration.showNotification(
+        title,
+        {
+          body: body,
+
+          tag:
+            'studymate-' +
+            Date.now(),
+
+          renotify: true,
+
+          vibrate: [
+            200,
+            100,
+            200
+          ]
+        }
+      );
+
+      console.log(
+        'Notification sent through Service Worker.'
+      );
+
+      return true;
+    }
+
+    if (typeof Notification === 'function') {
+
+      new Notification(
+        title,
+        {
+          body: body
+        }
+      );
+
+      console.log(
+        'Notification sent using browser fallback.'
+      );
+
+      return true;
+    }
+
+    return false;
+
   } catch (error) {
-    console.error('Notification failed:', error);
+
+    console.error(
+      'Notification failed:',
+      error
+    );
+
     return false;
   }
 }
 
-function reminderAppliesToday(reminder, dateISO) {
-  const repeat = reminder.repeat || 'none';
-  const currentDay = parseISO(dateISO).getDay();
 
-  if (repeat === 'none') return reminder.date === dateISO;
-  if (repeat === 'daily') return true;
-  if (repeat === 'weekdays') return [1, 2, 3, 4, 5].includes(currentDay);
-  if (repeat === 'weekly') {
-    if (!reminder.date) return false;
-    return parseISO(dateISO).getDay() === parseISO(reminder.date).getDay();
+/* ================================================================
+   REMINDER DATE CHECK
+   ================================================================ */
+
+function reminderAppliesToday(
+  reminder,
+  dateISO
+) {
+
+  const repeat =
+    reminder.repeat || 'none';
+
+  const currentDay =
+    parseISO(dateISO).getDay();
+
+
+  /* One time */
+  if (repeat === 'none') {
+
+    return reminder.date === dateISO;
+
   }
-  if (repeat === 'custom') return (reminder.days || []).includes(currentDay);
+
+
+  /* Every day */
+  if (repeat === 'daily') {
+
+    return true;
+
+  }
+
+
+  /* Monday - Friday */
+  if (repeat === 'weekdays') {
+
+    return [
+      1,
+      2,
+      3,
+      4,
+      5
+    ].includes(currentDay);
+
+  }
+
+
+  /* Weekly */
+  if (repeat === 'weekly') {
+
+    if (!reminder.date) {
+      return false;
+    }
+
+    return (
+      parseISO(dateISO).getDay() ===
+      parseISO(reminder.date).getDay()
+    );
+
+  }
+
+
+  /* Custom days */
+  if (repeat === 'custom') {
+
+    return (
+      reminder.days || []
+    ).includes(currentDay);
+
+  }
+
+
   return false;
 }
 
-function checkDueNotifications() {
-  if (!('Notification' in window)) return;
-  if (!S.settings.notify) return;
 
-  if (Notification.permission !== 'granted') {
-    S.settings.notify = false;
-    save();
+/* ================================================================
+   CHECK DUE NOTIFICATIONS
+   ================================================================ */
+
+function checkDueNotifications() {
+
+  if (!('Notification' in window)) {
     return;
   }
 
-  const today = todayISO();
-  const currentMinutes = minutesOf(nowHM());
+  if (!S.settings.notify) {
+    return;
+  }
 
-  /* Regular reminders */
+  if (
+    Notification.permission !==
+    'granted'
+  ) {
+
+    S.settings.notify = false;
+
+    save();
+
+    return;
+  }
+
+
+  const today =
+    todayISO();
+
+  const currentMinutes =
+    minutesOf(nowHM());
+
+
+  /* ============================================================
+     REGULAR REMINDERS
+     ============================================================ */
+
   S.reminders
-    .filter(reminder => reminder.enabled && reminder.time)
+    .filter(reminder =>
+      reminder.enabled &&
+      reminder.time
+    )
     .forEach(reminder => {
-      if (!reminderAppliesToday(reminder, today)) return;
 
-      const dueMinutes = minutesOf(reminder.time);
-      const key = `rem:${reminder.id}:${today}:${reminder.time}`;
+      if (
+        !reminderAppliesToday(
+          reminder,
+          today
+        )
+      ) {
+        return;
+      }
+
+
+      const dueMinutes =
+        minutesOf(reminder.time);
+
+
+      const key =
+        `rem:${reminder.id}:${today}:${reminder.time}`;
+
 
       if (
         currentMinutes >= dueMinutes &&
         currentMinutes - dueMinutes <= 30 &&
         !S.fired[key]
       ) {
+
         S.fired[key] = true;
+
         save();
-        notify('🔔 ' + reminder.title, 'Scheduled for ' + fmtTime(reminder.time));
+
+
+        notify(
+          '🔔 ' + reminder.title,
+          'Scheduled for ' +
+          fmtTime(reminder.time)
+        );
+
       }
+
     });
 
-  /* Task reminders */
+
+  /* ============================================================
+     TASK REMINDERS
+     ============================================================ */
+
   S.tasks
     .filter(task =>
+
       !task.done &&
+
       task.date === today &&
+
       task.time &&
+
       task.remind &&
+
       task.remind !== 'none'
+
     )
     .forEach(task => {
-      const minutesBefore = Number(task.remind);
-      if (!Number.isFinite(minutesBefore)) return;
 
-      const dueMinutes = minutesOf(task.time) - minutesBefore;
-      const key = `task:${task.id}:${today}:${task.remind}`;
+      const minutesBefore =
+        Number(task.remind);
+
+
+      if (
+        !Number.isFinite(
+          minutesBefore
+        )
+      ) {
+        return;
+      }
+
+
+      const dueMinutes =
+        minutesOf(task.time) -
+        minutesBefore;
+
+
+      const key =
+        `task:${task.id}:${today}:${task.remind}`;
+
 
       if (
         currentMinutes >= dueMinutes &&
         currentMinutes - dueMinutes <= 30 &&
         !S.fired[key]
       ) {
+
         S.fired[key] = true;
+
         save();
-        notify('⏰ ' + task.title, 'Starts at ' + fmtTime(task.time));
+
+
+        notify(
+          '⏰ ' + task.title,
+          'Starts at ' +
+          fmtTime(task.time)
+        );
+
       }
+
     });
 
-  /* Remove fired records from previous dates */
-  Object.keys(S.fired).forEach(key => {
-    const dateMatch = key.match(/\d{4}-\d{2}-\d{2}/);
-    if (dateMatch && dateMatch[0] !== today) {
+
+  /* ============================================================
+     CLEAN OLD FIRED NOTIFICATIONS
+     ============================================================ */
+
+  Object.keys(
+    S.fired
+  ).forEach(key => {
+
+    const match =
+      key.match(
+        /\d{4}-\d{2}-\d{2}/
+      );
+
+
+    if (
+      match &&
+      match[0] !== today
+    ) {
+
       delete S.fired[key];
+
     }
+
   });
+
 
   save();
 }
 
+
+/* ================================================================
+   START NOTIFICATION LOOP
+   ================================================================ */
+
 function startNotificationLoop() {
-  if (notificationTimer !== null) return;
+
+  if (
+    notificationTimer !== null
+  ) {
+    return;
+  }
+
 
   checkDueNotifications();
 
-  notificationTimer = setInterval(() => {
-    checkDueNotifications();
-  }, 15000);
+
+  notificationTimer =
+    setInterval(
+      () => {
+
+        checkDueNotifications();
+
+      },
+      15000
+    );
+
 }
 
-/* Check again when the user returns to the app */
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
-    checkDueNotifications();
-  }
-});
 
-window.addEventListener('focus', () => {
-  checkDueNotifications();
-});
+/* ================================================================
+   CHECK WHEN APP COMES BACK
+   ================================================================ */
+
+document.addEventListener(
+  'visibilitychange',
+  () => {
+
+    if (!document.hidden) {
+
+      checkDueNotifications();
+
+    }
+
+  }
+);
+
+
+window.addEventListener(
+  'focus',
+  () => {
+
+    checkDueNotifications();
+
+  }
+);
+
 
 /* ================================================================
    24. GLOBAL EVENT DELEGATION
@@ -2283,7 +2647,6 @@ async function syncWithBackend() {
     let pushedCount = 0;
     let pulledCount = 0;
 
-    // PUSH: Tasks
     for (const task of S.tasks) {
       if (task.synced) continue;
       try {
@@ -2300,7 +2663,6 @@ async function syncWithBackend() {
       } catch (e) { console.error('Task push error:', e); }
     }
 
-    // PUSH: Goals
     for (const goal of S.goals) {
       if (goal.synced) continue;
       try {
@@ -2317,7 +2679,6 @@ async function syncWithBackend() {
       } catch (e) { console.error('Goal push error:', e); }
     }
 
-    // PUSH: Routines
     for (const routine of S.routines) {
       if (routine.synced) continue;
       try {
@@ -2333,7 +2694,6 @@ async function syncWithBackend() {
       } catch (e) { console.error('Routine push error:', e); }
     }
 
-    // PUSH: Notes
     for (const note of S.notes) {
       if (note.synced) continue;
       try {
@@ -2349,7 +2709,6 @@ async function syncWithBackend() {
       } catch (e) { console.error('Note push error:', e); }
     }
 
-    // PULL: Tasks
     const tRes = await fetch(`${API_URL}/api/tasks?userId=${userId}`);
     const remoteTasks = await tRes.json();
     if (Array.isArray(remoteTasks)) {
@@ -2367,7 +2726,6 @@ async function syncWithBackend() {
       });
     }
 
-    // PULL: Goals
     const gRes = await fetch(`${API_URL}/api/goals?userId=${userId}`);
     const remoteGoals = await gRes.json();
     if (Array.isArray(remoteGoals)) {
@@ -2385,7 +2743,6 @@ async function syncWithBackend() {
       });
     }
 
-    // PULL: Routines
     const rRes = await fetch(`${API_URL}/api/routines?userId=${userId}`);
     const remoteRoutines = await rRes.json();
     if (Array.isArray(remoteRoutines)) {
@@ -2402,7 +2759,6 @@ async function syncWithBackend() {
       });
     }
 
-    // PULL: Notes
     const nRes = await fetch(`${API_URL}/api/notes?userId=${userId}`);
     const remoteNotes = await nRes.json();
     if (Array.isArray(remoteNotes)) {
