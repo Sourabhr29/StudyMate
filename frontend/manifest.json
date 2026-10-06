@@ -2,17 +2,27 @@
   "name": "StudyMate — Student Daily Planner",
   "short_name": "StudyMate",
   "description": "A student daily planner with tasks, goals, routines, reminders, notes, and focus timer.",
+
   "start_url": "./index.html",
   "scope": "./",
+
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui", "browser"],
   "orientation": "portrait-primary",
+
   "background_color": "#0f1115",
   "theme_color": "#0f1115",
+
   "lang": "en",
   "dir": "ltr",
-  "categories": ["productivity", "education", "utilities"],
+
+  "categories": [
+    "productivity",
+    "education",
+    "utilities"
+  ],
+
   "prefer_related_applications": false,
+
   "icons": [
     {
       "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjIwIiBmaWxsPSIjNmM4Y2ZmIi8+PHRleHQgeD0iNTAiIHk9IjUwIiBmb250LXNpemU9IjUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjM1ZW0iPvCfjJ08L3RleHQ+PC9zdmc+",
@@ -24,7 +34,7 @@
       "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjIwIiBmaWxsPSIjNmM4Y2ZmIi8+PHRleHQgeD0iNTAiIHk9IjUwIiBmb250LXNpemU9IjUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjM1ZW0iPvCfjJ08L3RleHQ+PC9zdmc+",
       "sizes": "512x512",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "maskable"
     }
   ]
 }
