@@ -107,9 +107,13 @@ function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); }
   catch (e) { console.warn('Save failed', e); }
 }
-
 const ui = {
   taskFilter: 'today',
+  taskSearch: '',
+  taskSort: 'date',
+  taskQuickFilter: '',
+  bulkMode: false,
+  selectedTasks: [],
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
   calSelected: todayISO(),
@@ -117,8 +121,7 @@ const ui = {
   expandedSubjects: {},
   goalExpanded: {},
 };
-
-/* ================================================================
+====================================================
    3. SAMPLE DATA
    ================================================================ */
 function seedSampleData() {
