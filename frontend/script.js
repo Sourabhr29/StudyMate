@@ -129,10 +129,10 @@ const ui = {
 function seedSampleData() {
   const t = todayISO();
   S.tasks = [
-    { id: uid(), title: 'DAA — Dijkstra Algorithm', desc: 'Revise + solve 3 problems', date: t, time: '14:00', priority: 'high',   category: 'study',      repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '' },
-    { id: uid(), title: 'HTML Practice',            desc: 'Build a landing page',     date: t, time: '16:00', priority: 'medium', category: 'coding',     repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '' },
-    { id: uid(), title: 'CN Revision — Unit 3',     desc: 'Transport layer notes',    date: t, time: '19:00', priority: 'high',   category: 'study',      repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '' },
-    { id: uid(), title: 'Submit DAA Assignment',    desc: 'Upload on portal',         date: t, time: '21:00', priority: 'high',   category: 'assignment', repeat: 'none', remind: '30', done: false, goalId: '', subjectId: '' },
+    { id: uid(), title: 'DAA — Dijkstra Algorithm', desc: 'Revise + solve 3 problems', date: t, time: '14:00', priority: 'high',   category: 'study',      repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '', pinned: false, createdAt: Date.now() },
+    { id: uid(), title: 'HTML Practice',            desc: 'Build a landing page',     date: t, time: '16:00', priority: 'medium', category: 'coding',     repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '', pinned: false, createdAt: Date.now() },
+    { id: uid(), title: 'CN Revision — Unit 3',     desc: 'Transport layer notes',    date: t, time: '19:00', priority: 'high',   category: 'study',      repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '', pinned: false, createdAt: Date.now() },
+    { id: uid(), title: 'Submit DAA Assignment',    desc: 'Upload on portal',         date: t, time: '21:00', priority: 'high',   category: 'assignment', repeat: 'none', remind: '30', done: false, goalId: '', subjectId: '', pinned: false, createdAt: Date.now() },
   ];
   S.routines = [
     { id: uid(), title: 'Wake Up',   start: '06:30', end: '06:45', icon: '🌅', category: 'personal', days: [0,1,2,3,4,5,6] },
@@ -1825,16 +1825,10 @@ async function registerStudyMateServiceWorker() {
   }
 
   try {
-    const registration = await navigator.serviceWorker.register(
-      '/sw.js',
-      { scope: '/' }
-    );
-
+    const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     console.log('StudyMate Service Worker registered:', registration.scope);
     studyMateSW = registration;
-
     if (registration.active) return registration;
-
     await navigator.serviceWorker.ready;
     studyMateSW = await navigator.serviceWorker.getRegistration('/');
     return studyMateSW;
@@ -1854,55 +1848,38 @@ async function enableNotifications() {
     toast('This browser does not support notifications.');
     return false;
   }
-
   if (!window.isSecureContext) {
     toast('Open StudyMate using the HTTPS Render URL.');
     return false;
   }
-
   try {
     await registerStudyMateServiceWorker();
-
     let permission = Notification.permission;
-
     if (permission === 'default') {
       permission = await Notification.requestPermission();
     }
-
     console.log('Notification permission:', permission);
-
     if (permission !== 'granted') {
       S.settings.notify = false;
       save();
-
       if (permission === 'denied') {
         toast('❌ Notifications are blocked. Allow them in Chrome settings.');
       } else {
         toast('Notification permission was not granted.');
       }
-
       render();
       return false;
     }
-
     S.settings.notify = true;
     save();
-
     startNotificationLoop();
-
-    const success = await notify(
-      '🎓 StudyMate',
-      'Notifications are working successfully!'
-    );
-
+    const success = await notify('🎓 StudyMate', 'Notifications are working successfully!');
     render();
-
     if (success) {
       toast('🔔 Notifications enabled successfully!');
     } else {
       toast('Permission is enabled, but notification could not be sent.');
     }
-
     return success;
   } catch (error) {
     console.error('Enable notification error:', error);
@@ -1912,27 +1889,16 @@ async function enableNotifications() {
 }
 
 async function notify(title, body) {
-  if (!('Notification' in window)) {
-    console.error('Notification API not available.');
-    return false;
-  }
-
-  if (Notification.permission !== 'granted') {
-    console.warn('Notification permission:', Notification.permission);
-    return false;
-  }
-
+  if (!('Notification' in window)) return false;
+  if (Notification.permission !== 'granted') return false;
   try {
     let registration = studyMateSW;
-
     if (!registration && 'serviceWorker' in navigator) {
       registration = await navigator.serviceWorker.getRegistration('/');
     }
-
     if (!registration) {
       registration = await registerStudyMateServiceWorker();
     }
-
     if (registration && typeof registration.showNotification === 'function') {
       await registration.showNotification(title, {
         body: body,
@@ -1940,17 +1906,12 @@ async function notify(title, body) {
         renotify: true,
         vibrate: [200, 100, 200]
       });
-
-      console.log('Notification sent through Service Worker.');
       return true;
     }
-
     if (typeof Notification === 'function') {
       new Notification(title, { body: body });
-      console.log('Notification sent using browser fallback.');
       return true;
     }
-
     return false;
   } catch (error) {
     console.error('Notification failed:', error);
@@ -1961,7 +1922,6 @@ async function notify(title, body) {
 function reminderAppliesToday(reminder, dateISO) {
   const repeat = reminder.repeat || 'none';
   const currentDay = parseISO(dateISO).getDay();
-
   if (repeat === 'none') return reminder.date === dateISO;
   if (repeat === 'daily') return true;
   if (repeat === 'weekdays') return [1, 2, 3, 4, 5].includes(currentDay);
@@ -1976,13 +1936,11 @@ function reminderAppliesToday(reminder, dateISO) {
 function checkDueNotifications() {
   if (!('Notification' in window)) return;
   if (!S.settings.notify) return;
-
   if (Notification.permission !== 'granted') {
     S.settings.notify = false;
     save();
     return;
   }
-
   const today = todayISO();
   const currentMinutes = minutesOf(nowHM());
 
@@ -1990,10 +1948,8 @@ function checkDueNotifications() {
     .filter(reminder => reminder.enabled && reminder.time)
     .forEach(reminder => {
       if (!reminderAppliesToday(reminder, today)) return;
-
       const dueMinutes = minutesOf(reminder.time);
       const key = `rem:${reminder.id}:${today}:${reminder.time}`;
-
       if (currentMinutes >= dueMinutes && currentMinutes - dueMinutes <= 30 && !S.fired[key]) {
         S.fired[key] = true;
         save();
@@ -2002,20 +1958,12 @@ function checkDueNotifications() {
     });
 
   S.tasks
-    .filter(task =>
-      !task.done &&
-      task.date === today &&
-      task.time &&
-      task.remind &&
-      task.remind !== 'none'
-    )
+    .filter(task => !task.done && task.date === today && task.time && task.remind && task.remind !== 'none')
     .forEach(task => {
       const minutesBefore = Number(task.remind);
       if (!Number.isFinite(minutesBefore)) return;
-
       const dueMinutes = minutesOf(task.time) - minutesBefore;
       const key = `task:${task.id}:${today}:${task.remind}`;
-
       if (currentMinutes >= dueMinutes && currentMinutes - dueMinutes <= 30 && !S.fired[key]) {
         S.fired[key] = true;
         save();
@@ -2035,18 +1983,14 @@ function checkDueNotifications() {
 
 function startNotificationLoop() {
   if (notificationTimer !== null) return;
-
   checkDueNotifications();
-
   notificationTimer = setInterval(() => {
     checkDueNotifications();
   }, 15000);
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
-    checkDueNotifications();
-  }
+  if (!document.hidden) checkDueNotifications();
 });
 
 window.addEventListener('focus', () => {
@@ -2070,8 +2014,8 @@ document.addEventListener('click', e => {
     return;
   }
   if (navEl && !el) { navigate(navEl.dataset.nav); return; }
-
   if (!el) return;
+
   const a = el.dataset.action;
   const id = el.dataset.id;
 
@@ -2255,22 +2199,11 @@ document.addEventListener('click', e => {
       break;
 
     case 'test-notify':
-      if (
-        !('Notification' in window) ||
-        Notification.permission !== 'granted' ||
-        !S.settings.notify
-      ) {
+      if (!('Notification' in window) || Notification.permission !== 'granted' || !S.settings.notify) {
         enableNotifications();
       } else {
-        notify(
-          '🎓 StudyMate',
-          'This is a test notification.'
-        ).then(sent => {
-          toast(
-            sent
-              ? 'Test notification sent!'
-              : 'Test notification failed. Check browser settings.'
-          );
+        notify('🎓 StudyMate', 'This is a test notification.').then(sent => {
+          toast(sent ? 'Test notification sent!' : 'Test notification failed. Check browser settings.');
         });
       }
       break;
@@ -2670,13 +2603,11 @@ function bootApp() {
   updateDrawerHeader();
   render();
   checkAchievements();
-
   startNotificationLoop();
 }
 
 function init() {
   document.documentElement.setAttribute('data-theme', S.settings.theme);
-
   if (!S.user.onboarded) {
     renderAuth();
     return;
