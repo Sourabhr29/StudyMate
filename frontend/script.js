@@ -107,6 +107,7 @@ function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); }
   catch (e) { console.warn('Save failed', e); }
 }
+
 const ui = {
   taskFilter: 'today',
   taskSearch: '',
@@ -121,7 +122,8 @@ const ui = {
   expandedSubjects: {},
   goalExpanded: {},
 };
-====================================================
+
+/* ================================================================
    3. SAMPLE DATA
    ================================================================ */
 function seedSampleData() {
@@ -530,13 +532,24 @@ function renderHome() {
 
 function taskRowHTML(task) {
   const cat = CATEGORIES[task.category] || CATEGORIES.study;
+  const isSelected = ui.selectedTasks.includes(task.id);
+  const inBulk = ui.bulkMode;
+
   return `
-    <div class="trow ${task.done ? 'done' : ''}">
-      <button class="check ${task.done ? 'on' : ''}" data-action="toggle-task" data-id="${task.id}">
-        ${task.done ? '✓' : ''}
-      </button>
-      <div class="t-main" data-action="edit-task" data-id="${task.id}">
-        <div class="t-title">${esc(task.title)}</div>
+    <div class="trow ${task.done ? 'done' : ''}" ${inBulk ? `data-action="bulk-toggle" data-id="${task.id}"` : ''}>
+      ${inBulk ? `
+        <button class="check ${isSelected ? 'on' : ''}" style="border-radius:50%">
+          ${isSelected ? '✓' : ''}
+        </button>
+      ` : `
+        <button class="check ${task.done ? 'on' : ''}" data-action="toggle-task" data-id="${task.id}">
+          ${task.done ? '✓' : ''}
+        </button>
+      `}
+      <div class="t-main" ${!inBulk ? `data-action="edit-task" data-id="${task.id}"` : ''}>
+        <div class="t-title">
+          ${task.pinned ? '📌 ' : ''}${esc(task.title)}
+        </div>
         <div class="t-sub">
           <span class="dot p-${task.priority}"></span>
           <span>${cat.icon} ${cat.label}</span>
@@ -544,6 +557,13 @@ function taskRowHTML(task) {
           ${task.date !== todayISO() ? `<span>· ${fmtShort(task.date)}</span>` : ''}
         </div>
       </div>
+      ${!inBulk ? `
+        <button
+          data-action="pin-task"
+          data-id="${task.id}"
+          style="width:30px;height:30px;border-radius:50%;background:${task.pinned ? 'var(--accent)' : 'transparent'};border:1px solid ${task.pinned ? 'var(--accent)' : 'transparent'};font-size:13px;display:grid;place-items:center"
+        >${task.pinned ? '📍' : '📌'}</button>
+      ` : ''}
     </div>`;
 }
 
@@ -555,24 +575,100 @@ function renderTasks() {
   const f = ui.taskFilter;
 
   let list;
-  if (f === 'today')     list = S.tasks.filter(x => x.date === t);
+  if (f === 'today')         list = S.tasks.filter(x => x.date === t);
   else if (f === 'upcoming') list = S.tasks.filter(x => x.date > t);
   else if (f === 'overdue')  list = S.tasks.filter(x => !x.done && x.date < t);
   else if (f === 'done')     list = S.tasks.filter(x => x.done);
-  else list = [...S.tasks];
+  else                       list = [...S.tasks];
 
-  list.sort((a, b) => (a.date + (a.time || '99:99')).localeCompare(b.date + (b.time || '99:99')));
+  if (ui.taskQuickFilter === 'pinned') {
+    list = list.filter(x => x.pinned);
+  } else if (ui.taskQuickFilter === 'high') {
+    list = list.filter(x => x.priority === 'high' && !x.done);
+  }
+
+  const q = (ui.taskSearch || '').toLowerCase().trim();
+  if (q) {
+    list = list.filter(x =>
+      x.title.toLowerCase().includes(q) ||
+      (x.desc || '').toLowerCase().includes(q)
+    );
+  }
+
+  if (ui.taskSort === 'priority') {
+    const pOrder = { high: 0, medium: 1, low: 2 };
+    list.sort((a, b) => (pOrder[a.priority] ?? 9) - (pOrder[b.priority] ?? 9));
+  } else if (ui.taskSort === 'title') {
+    list.sort((a, b) => a.title.localeCompare(b.title));
+  } else if (ui.taskSort === 'created') {
+    list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  } else {
+    list.sort((a, b) => (a.date + (a.time || '99:99')).localeCompare(b.date + (b.time || '99:99')));
+  }
+
+  list.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
   const groups = {};
   list.forEach(x => { (groups[x.date] ||= []).push(x); });
 
+  const bulkHeader = ui.bulkMode ? `
+    <div class="card" style="background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent;margin-bottom:12px;position:sticky;top:0;z-index:10">
+      <div style="display:flex;align-items:center;gap:8px;color:#fff;flex-wrap:wrap">
+        <div style="flex:1;font-weight:800;min-width:80px">
+          ${ui.selectedTasks.length} selected
+        </div>
+        <button class="btn sm" data-action="bulk-complete" style="background:#fff;color:var(--accent);border-color:transparent">✓ Complete</button>
+        <button class="btn sm" data-action="bulk-delete" style="background:#fff;color:#ef4444;border-color:transparent">🗑️ Delete</button>
+        <button class="btn sm" data-action="bulk-cancel" style="background:rgba(255,255,255,.2);color:#fff;border-color:transparent">✕</button>
+      </div>
+    </div>
+  ` : '';
+
   return `
-    <div class="section-title">📋 Tasks</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="section-title" style="margin:0">📋 Tasks</div>
+      ${!ui.bulkMode && list.length > 0 ? `
+        <button class="btn sm" data-action="bulk-enter">☑️ Select</button>
+      ` : ''}
+    </div>
+
+    ${bulkHeader}
+
+    <div style="position:relative;margin-bottom:14px">
+      <input
+        id="taskSearch"
+        placeholder="🔍 Search tasks..."
+        value="${esc(ui.taskSearch)}"
+        data-action="task-search"
+      />
+      ${ui.taskSearch ? `
+        <button
+          data-action="task-clear-search"
+          style="position:absolute;right:8px;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;background:var(--card2);border:1px solid var(--line);font-size:12px;display:grid;place-items:center"
+        >✕</button>
+      ` : ''}
+    </div>
 
     <div class="chips">
       ${[['today','Today'],['upcoming','Upcoming'],['overdue','Overdue'],['done','Done'],['all','All']]
         .map(([k, l]) => `<button class="chip ${f === k ? 'active' : ''}" data-action="task-filter" data-filter="${k}">${l}</button>`)
         .join('')}
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none">
+      <select
+        data-action="task-sort"
+        style="flex:0 0 auto;width:auto;margin:0;padding:9px 12px;font-size:12.5px;font-weight:700;border-radius:10px;background:var(--card);border:1px solid var(--line);color:var(--text)"
+      >
+        <option value="date"     ${ui.taskSort === 'date'     ? 'selected' : ''}>📅 Date</option>
+        <option value="priority" ${ui.taskSort === 'priority' ? 'selected' : ''}>🔴 Priority</option>
+        <option value="title"    ${ui.taskSort === 'title'    ? 'selected' : ''}>🔤 Title</option>
+        <option value="created"  ${ui.taskSort === 'created'  ? 'selected' : ''}>🆕 Newest</option>
+      </select>
+
+      <button class="chip ${ui.taskQuickFilter === 'high' ? 'active' : ''}" data-action="task-quick-filter" data-qf="high" style="flex:0 0 auto">🔴 High Priority</button>
+      <button class="chip ${ui.taskQuickFilter === 'pinned' ? 'active' : ''}" data-action="task-quick-filter" data-qf="pinned" style="flex:0 0 auto">📌 Pinned</button>
+      ${ui.taskQuickFilter ? `<button class="chip" data-action="task-clear-quick" style="flex:0 0 auto">✕ Clear</button>` : ''}
     </div>
 
     <button class="btn primary block" data-action="add-task" style="margin-bottom:16px">＋ New Task</button>
@@ -582,7 +678,12 @@ function renderTasks() {
         ${fmtShort(date)}
       </div>
       <div class="tlist">${groups[date].map(taskRowHTML).join('')}</div>
-    `).join('') : `<div class="empty"><span class="big">📭</span>No tasks here yet.</div>`}
+    `).join('') : `
+      <div class="empty">
+        <span class="big">${q ? '🔍' : '📭'}</span>
+        ${q ? `No tasks match "${esc(ui.taskSearch)}"` : 'No tasks here yet.'}
+      </div>
+    `}
   `;
 }
 
@@ -1383,8 +1484,18 @@ function taskModal(task) {
       };
       if (!data.title) return false;
 
-      if (task) Object.assign(task, data);
-      else S.tasks.push({ id: uid(), done: false, subjectId: '', ...data });
+      if (task) {
+        Object.assign(task, data);
+      } else {
+        S.tasks.push({
+          id: uid(),
+          done: false,
+          pinned: false,
+          subjectId: '',
+          createdAt: Date.now(),
+          ...data
+        });
+      }
 
       markActivity();
       save();
@@ -1707,11 +1818,6 @@ function quickAddSheet() {
 let notificationTimer = null;
 let studyMateSW = null;
 
-
-/* ================================================================
-   SERVICE WORKER REGISTRATION
-   ================================================================ */
-
 async function registerStudyMateServiceWorker() {
   if (!('serviceWorker' in navigator)) {
     console.warn('Service Worker is not supported.');
@@ -1724,64 +1830,33 @@ async function registerStudyMateServiceWorker() {
       { scope: '/' }
     );
 
-    console.log(
-      'StudyMate Service Worker registered:',
-      registration.scope
-    );
-
+    console.log('StudyMate Service Worker registered:', registration.scope);
     studyMateSW = registration;
 
-    if (registration.active) {
-      return registration;
-    }
+    if (registration.active) return registration;
 
     await navigator.serviceWorker.ready;
-
     studyMateSW = await navigator.serviceWorker.getRegistration('/');
-
     return studyMateSW;
-
   } catch (error) {
-    console.error(
-      'Service Worker registration failed:',
-      error
-    );
-
+    console.error('Service Worker registration failed:', error);
     studyMateSW = null;
     return null;
   }
 }
 
-
-/* ================================================================
-   NOTIFICATION SUPPORT
-   ================================================================ */
-
 function notificationSupported() {
-  return (
-    'Notification' in window &&
-    window.isSecureContext
-  );
+  return ('Notification' in window && window.isSecureContext);
 }
 
-
-/* ================================================================
-   ENABLE NOTIFICATIONS
-   ================================================================ */
-
 async function enableNotifications() {
-
   if (!('Notification' in window)) {
-    toast(
-      'This browser does not support notifications.'
-    );
+    toast('This browser does not support notifications.');
     return false;
   }
 
   if (!window.isSecureContext) {
-    toast(
-      'Open StudyMate using the HTTPS Render URL.'
-    );
+    toast('Open StudyMate using the HTTPS Render URL.');
     return false;
   }
 
@@ -1794,28 +1869,19 @@ async function enableNotifications() {
       permission = await Notification.requestPermission();
     }
 
-    console.log(
-      'Notification permission:',
-      permission
-    );
+    console.log('Notification permission:', permission);
 
     if (permission !== 'granted') {
-
       S.settings.notify = false;
       save();
 
       if (permission === 'denied') {
-        toast(
-          '❌ Notifications are blocked. Allow them in Chrome settings.'
-        );
+        toast('❌ Notifications are blocked. Allow them in Chrome settings.');
       } else {
-        toast(
-          'Notification permission was not granted.'
-        );
+        toast('Notification permission was not granted.');
       }
 
       render();
-
       return false;
     }
 
@@ -1834,442 +1900,158 @@ async function enableNotifications() {
     if (success) {
       toast('🔔 Notifications enabled successfully!');
     } else {
-      toast(
-        'Permission is enabled, but notification could not be sent.'
-      );
+      toast('Permission is enabled, but notification could not be sent.');
     }
 
     return success;
-
   } catch (error) {
-
-    console.error(
-      'Enable notification error:',
-      error
-    );
-
-    toast(
-      'Could not enable notifications.'
-    );
-
+    console.error('Enable notification error:', error);
+    toast('Could not enable notifications.');
     return false;
   }
 }
 
-
-/* ================================================================
-   SEND NOTIFICATION
-   ================================================================ */
-
 async function notify(title, body) {
-
   if (!('Notification' in window)) {
-    console.error(
-      'Notification API not available.'
-    );
-
+    console.error('Notification API not available.');
     return false;
   }
 
   if (Notification.permission !== 'granted') {
-
-    console.warn(
-      'Notification permission:',
-      Notification.permission
-    );
-
+    console.warn('Notification permission:', Notification.permission);
     return false;
   }
 
   try {
-
     let registration = studyMateSW;
 
     if (!registration && 'serviceWorker' in navigator) {
-
-      registration =
-        await navigator.serviceWorker.getRegistration('/');
-
+      registration = await navigator.serviceWorker.getRegistration('/');
     }
 
     if (!registration) {
-
-      registration =
-        await registerStudyMateServiceWorker();
-
+      registration = await registerStudyMateServiceWorker();
     }
 
-    if (
-      registration &&
-      typeof registration.showNotification === 'function'
-    ) {
+    if (registration && typeof registration.showNotification === 'function') {
+      await registration.showNotification(title, {
+        body: body,
+        tag: 'studymate-' + Date.now(),
+        renotify: true,
+        vibrate: [200, 100, 200]
+      });
 
-      await registration.showNotification(
-        title,
-        {
-          body: body,
-
-          tag:
-            'studymate-' +
-            Date.now(),
-
-          renotify: true,
-
-          vibrate: [
-            200,
-            100,
-            200
-          ]
-        }
-      );
-
-      console.log(
-        'Notification sent through Service Worker.'
-      );
-
+      console.log('Notification sent through Service Worker.');
       return true;
     }
 
     if (typeof Notification === 'function') {
-
-      new Notification(
-        title,
-        {
-          body: body
-        }
-      );
-
-      console.log(
-        'Notification sent using browser fallback.'
-      );
-
+      new Notification(title, { body: body });
+      console.log('Notification sent using browser fallback.');
       return true;
     }
 
     return false;
-
   } catch (error) {
-
-    console.error(
-      'Notification failed:',
-      error
-    );
-
+    console.error('Notification failed:', error);
     return false;
   }
 }
 
+function reminderAppliesToday(reminder, dateISO) {
+  const repeat = reminder.repeat || 'none';
+  const currentDay = parseISO(dateISO).getDay();
 
-/* ================================================================
-   REMINDER DATE CHECK
-   ================================================================ */
-
-function reminderAppliesToday(
-  reminder,
-  dateISO
-) {
-
-  const repeat =
-    reminder.repeat || 'none';
-
-  const currentDay =
-    parseISO(dateISO).getDay();
-
-
-  /* One time */
-  if (repeat === 'none') {
-
-    return reminder.date === dateISO;
-
-  }
-
-
-  /* Every day */
-  if (repeat === 'daily') {
-
-    return true;
-
-  }
-
-
-  /* Monday - Friday */
-  if (repeat === 'weekdays') {
-
-    return [
-      1,
-      2,
-      3,
-      4,
-      5
-    ].includes(currentDay);
-
-  }
-
-
-  /* Weekly */
+  if (repeat === 'none') return reminder.date === dateISO;
+  if (repeat === 'daily') return true;
+  if (repeat === 'weekdays') return [1, 2, 3, 4, 5].includes(currentDay);
   if (repeat === 'weekly') {
-
-    if (!reminder.date) {
-      return false;
-    }
-
-    return (
-      parseISO(dateISO).getDay() ===
-      parseISO(reminder.date).getDay()
-    );
-
+    if (!reminder.date) return false;
+    return parseISO(dateISO).getDay() === parseISO(reminder.date).getDay();
   }
-
-
-  /* Custom days */
-  if (repeat === 'custom') {
-
-    return (
-      reminder.days || []
-    ).includes(currentDay);
-
-  }
-
-
+  if (repeat === 'custom') return (reminder.days || []).includes(currentDay);
   return false;
 }
 
-
-/* ================================================================
-   CHECK DUE NOTIFICATIONS
-   ================================================================ */
-
 function checkDueNotifications() {
+  if (!('Notification' in window)) return;
+  if (!S.settings.notify) return;
 
-  if (!('Notification' in window)) {
-    return;
-  }
-
-  if (!S.settings.notify) {
-    return;
-  }
-
-  if (
-    Notification.permission !==
-    'granted'
-  ) {
-
+  if (Notification.permission !== 'granted') {
     S.settings.notify = false;
-
     save();
-
     return;
   }
 
-
-  const today =
-    todayISO();
-
-  const currentMinutes =
-    minutesOf(nowHM());
-
-
-  /* ============================================================
-     REGULAR REMINDERS
-     ============================================================ */
+  const today = todayISO();
+  const currentMinutes = minutesOf(nowHM());
 
   S.reminders
-    .filter(reminder =>
-      reminder.enabled &&
-      reminder.time
-    )
+    .filter(reminder => reminder.enabled && reminder.time)
     .forEach(reminder => {
+      if (!reminderAppliesToday(reminder, today)) return;
 
-      if (
-        !reminderAppliesToday(
-          reminder,
-          today
-        )
-      ) {
-        return;
-      }
+      const dueMinutes = minutesOf(reminder.time);
+      const key = `rem:${reminder.id}:${today}:${reminder.time}`;
 
-
-      const dueMinutes =
-        minutesOf(reminder.time);
-
-
-      const key =
-        `rem:${reminder.id}:${today}:${reminder.time}`;
-
-
-      if (
-        currentMinutes >= dueMinutes &&
-        currentMinutes - dueMinutes <= 30 &&
-        !S.fired[key]
-      ) {
-
+      if (currentMinutes >= dueMinutes && currentMinutes - dueMinutes <= 30 && !S.fired[key]) {
         S.fired[key] = true;
-
         save();
-
-
-        notify(
-          '🔔 ' + reminder.title,
-          'Scheduled for ' +
-          fmtTime(reminder.time)
-        );
-
+        notify('🔔 ' + reminder.title, 'Scheduled for ' + fmtTime(reminder.time));
       }
-
     });
-
-
-  /* ============================================================
-     TASK REMINDERS
-     ============================================================ */
 
   S.tasks
     .filter(task =>
-
       !task.done &&
-
       task.date === today &&
-
       task.time &&
-
       task.remind &&
-
       task.remind !== 'none'
-
     )
     .forEach(task => {
+      const minutesBefore = Number(task.remind);
+      if (!Number.isFinite(minutesBefore)) return;
 
-      const minutesBefore =
-        Number(task.remind);
+      const dueMinutes = minutesOf(task.time) - minutesBefore;
+      const key = `task:${task.id}:${today}:${task.remind}`;
 
-
-      if (
-        !Number.isFinite(
-          minutesBefore
-        )
-      ) {
-        return;
-      }
-
-
-      const dueMinutes =
-        minutesOf(task.time) -
-        minutesBefore;
-
-
-      const key =
-        `task:${task.id}:${today}:${task.remind}`;
-
-
-      if (
-        currentMinutes >= dueMinutes &&
-        currentMinutes - dueMinutes <= 30 &&
-        !S.fired[key]
-      ) {
-
+      if (currentMinutes >= dueMinutes && currentMinutes - dueMinutes <= 30 && !S.fired[key]) {
         S.fired[key] = true;
-
         save();
-
-
-        notify(
-          '⏰ ' + task.title,
-          'Starts at ' +
-          fmtTime(task.time)
-        );
-
+        notify('⏰ ' + task.title, 'Starts at ' + fmtTime(task.time));
       }
-
     });
 
-
-  /* ============================================================
-     CLEAN OLD FIRED NOTIFICATIONS
-     ============================================================ */
-
-  Object.keys(
-    S.fired
-  ).forEach(key => {
-
-    const match =
-      key.match(
-        /\d{4}-\d{2}-\d{2}/
-      );
-
-
-    if (
-      match &&
-      match[0] !== today
-    ) {
-
+  Object.keys(S.fired).forEach(key => {
+    const match = key.match(/\d{4}-\d{2}-\d{2}/);
+    if (match && match[0] !== today) {
       delete S.fired[key];
-
     }
-
   });
-
 
   save();
 }
 
-
-/* ================================================================
-   START NOTIFICATION LOOP
-   ================================================================ */
-
 function startNotificationLoop() {
-
-  if (
-    notificationTimer !== null
-  ) {
-    return;
-  }
-
+  if (notificationTimer !== null) return;
 
   checkDueNotifications();
 
-
-  notificationTimer =
-    setInterval(
-      () => {
-
-        checkDueNotifications();
-
-      },
-      15000
-    );
-
+  notificationTimer = setInterval(() => {
+    checkDueNotifications();
+  }, 15000);
 }
 
-
-/* ================================================================
-   CHECK WHEN APP COMES BACK
-   ================================================================ */
-
-document.addEventListener(
-  'visibilitychange',
-  () => {
-
-    if (!document.hidden) {
-
-      checkDueNotifications();
-
-    }
-
-  }
-);
-
-
-window.addEventListener(
-  'focus',
-  () => {
-
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
     checkDueNotifications();
-
   }
-);
+});
 
+window.addEventListener('focus', () => {
+  checkDueNotifications();
+});
 
 /* ================================================================
    24. GLOBAL EVENT DELEGATION
@@ -2326,6 +2108,87 @@ document.addEventListener('click', e => {
     }
     case 'edit-task': taskModal(getTask(id)); break;
     case 'task-filter': ui.taskFilter = el.dataset.filter; render(); break;
+
+    case 'task-sort': ui.taskSort = el.value; render(); break;
+
+    case 'task-clear-search':
+      ui.taskSearch = '';
+      render();
+      break;
+
+    case 'task-quick-filter': {
+      const qf = el.dataset.qf;
+      ui.taskQuickFilter = (ui.taskQuickFilter === qf) ? '' : qf;
+      render();
+      break;
+    }
+
+    case 'task-clear-quick':
+      ui.taskQuickFilter = '';
+      render();
+      break;
+
+    case 'pin-task': {
+      const task = getTask(id);
+      if (!task) break;
+      task.pinned = !task.pinned;
+      save();
+      render();
+      toast(task.pinned ? 'Task pinned 📌' : 'Task unpinned');
+      break;
+    }
+
+    case 'bulk-enter':
+      ui.bulkMode = true;
+      ui.selectedTasks = [];
+      render();
+      break;
+
+    case 'bulk-cancel':
+      ui.bulkMode = false;
+      ui.selectedTasks = [];
+      render();
+      break;
+
+    case 'bulk-toggle': {
+      const idx = ui.selectedTasks.indexOf(id);
+      if (idx >= 0) ui.selectedTasks.splice(idx, 1);
+      else ui.selectedTasks.push(id);
+      render();
+      break;
+    }
+
+    case 'bulk-complete': {
+      if (!ui.selectedTasks.length) { toast('No tasks selected'); break; }
+      let count = 0;
+      ui.selectedTasks.forEach(tid => {
+        const task = getTask(tid);
+        if (task && !task.done) {
+          task.done = true;
+          count++;
+        }
+      });
+      if (count > 0) markActivity();
+      save();
+      toast(`${count} task${count === 1 ? '' : 's'} completed ✅`);
+      ui.bulkMode = false;
+      ui.selectedTasks = [];
+      render();
+      break;
+    }
+
+    case 'bulk-delete': {
+      if (!ui.selectedTasks.length) { toast('No tasks selected'); break; }
+      if (!confirm(`Delete ${ui.selectedTasks.length} task${ui.selectedTasks.length === 1 ? '' : 's'}?`)) break;
+      const count = ui.selectedTasks.length;
+      S.tasks = S.tasks.filter(t => !ui.selectedTasks.includes(t.id));
+      save();
+      toast(`${count} task${count === 1 ? '' : 's'} deleted 🗑️`);
+      ui.bulkMode = false;
+      ui.selectedTasks = [];
+      render();
+      break;
+    }
 
     case 'toggle-routine': {
       const key = `${id}:${todayISO()}`;
@@ -2580,11 +2443,20 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => {
   const el = e.target.closest('[data-action]');
   if (!el) return;
+
   if (el.dataset.action === 'note-search') {
     ui.noteQuery = el.value;
     const pos = el.selectionStart;
     render();
     const next = $('#noteSearch');
+    if (next) { next.focus(); next.setSelectionRange(pos, pos); }
+  }
+
+  if (el.dataset.action === 'task-search') {
+    ui.taskSearch = el.value;
+    const pos = el.selectionStart;
+    render();
+    const next = $('#taskSearch');
     if (next) { next.focus(); next.setSelectionRange(pos, pos); }
   }
 });
@@ -2799,7 +2671,6 @@ function bootApp() {
   render();
   checkAchievements();
 
-  // Start reminders after app opens or onboarding finishes
   startNotificationLoop();
 }
 
