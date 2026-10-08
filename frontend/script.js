@@ -204,6 +204,30 @@ function routineForDay(dateISO) {
     .sort((a, b) => a.start.localeCompare(b.start));
 }
 function isRoutineDone(id, dateISO) { return !!S.routineLog[`${id}:${dateISO}`]; }
+function routineTimeStatus(r, dateISO) {
+  if (!r.start || !r.end) return { status: 'upcoming', progress: 0 };
+  
+  const today = todayISO();
+  const nowM = minutesOf(nowHM());
+  const startM = minutesOf(r.start);
+  const endM = minutesOf(r.end);
+  const done = isRoutineDone(r.id, dateISO);
+  
+  if (done) return { status: 'done', progress: 100 };
+  
+  if (dateISO < today) return { status: 'missed', progress: 0 };
+  if (dateISO > today) return { status: 'upcoming', progress: 0 };
+  
+  if (nowM < startM) return { status: 'upcoming', progress: 0 };
+  if (nowM >= endM) return { status: 'missed', progress: 0 };
+  
+  const duration = endM - startM;
+  const elapsed = nowM - startM;
+  const progress = Math.round((elapsed / duration) * 100);
+  const remaining = endM - nowM;
+  
+  return { status: 'running', progress, remaining };
+}
 
 function markActivity(dateISO = todayISO()) {
   S.activity[dateISO] = true;
@@ -696,9 +720,36 @@ function renderRoutine() {
   const doneCount = list.filter(r => isRoutineDone(r.id, t)).length;
   const pct = list.length ? Math.round((doneCount / list.length) * 100) : 0;
 
+  // Weekly mini chart
+  const week = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = addDays(t, -i);
+    const dayRoutines = routineForDay(d);
+    const dayDone = dayRoutines.filter(r => isRoutineDone(r.id, d)).length;
+    const dayPct = dayRoutines.length ? Math.round((dayDone / dayRoutines.length) * 100) : 0;
+    week.push({ date: d, pct: dayPct });
+  }
+
   return `
     <div class="section-title">📅 Daily Routine</div>
 
+    <!-- Weekly mini chart -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">This Week</div>
+        <span class="xs muted">Last 7 days</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:flex-end;height:60px;padding-top:8px">
+        ${week.map(w => `
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end">
+            <div style="width:100%;border-radius:6px 6px 3px 3px;background:${w.pct > 70 ? 'var(--green)' : w.pct > 30 ? 'var(--amber)' : 'var(--card2)'};height:${Math.max(4, w.pct)}%;transition:.3s"></div>
+            <div class="xs muted" style="font-weight:700">${DOW[parseISO(w.date).getDay()][0]}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Today's progress -->
     <div class="card">
       <div class="card-head">
         <div class="card-title">Today · ${fmtShort(t)}</div>
@@ -710,24 +761,57 @@ function renderRoutine() {
     <button class="btn primary block" data-action="add-routine" style="margin-bottom:16px">＋ Add Routine Item</button>
 
     ${list.length ? list.map(r => {
-      const done = isRoutineDone(r.id, t);
       const cat = CATEGORIES[r.category] || CATEGORIES.personal;
+      const { status, progress, remaining } = routineTimeStatus(r, t);
+      
+      // Style based on status
+      const isRunning = status === 'running';
+      const isDone = status === 'done';
+      const isMissed = status === 'missed';
+      
+      const borderColor = isRunning ? 'var(--green)' : isDone ? 'var(--line)' : 'var(--line)';
+      const bgStyle = isRunning 
+        ? 'background:linear-gradient(90deg, rgba(34,197,94,.08), transparent);border-color:var(--green)'
+        : isDone
+          ? 'opacity:.55'
+          : '';
+      
       return `
-        <div class="rt-item" style="${done ? 'opacity:.55' : ''}">
-          <button class="check ${done ? 'on' : ''}" data-action="toggle-routine" data-id="${r.id}">
-            ${done ? '✓' : ''}
+        <div class="rt-item" style="${bgStyle};border:1px solid ${borderColor};position:relative;overflow:hidden">
+          <!-- Category color bar -->
+          <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${cat.color || 'var(--accent)'}"></div>
+          
+          <button class="check ${isDone ? 'on' : ''}" data-action="toggle-routine" data-id="${r.id}" style="margin-left:6px">
+            ${isDone ? '✓' : ''}
           </button>
-          <div class="rt-time">${fmtTime(r.start)}<br><span class="xs">${fmtTime(r.end)}</span></div>
+          
+          <div class="rt-time">
+            ${fmtTime(r.start)}<br>
+            <span class="xs">${fmtTime(r.end)}</span>
+          </div>
+          
           <div class="rt-ic">${r.icon || cat.icon}</div>
+          
           <div style="flex:1;min-width:0" data-action="edit-routine" data-id="${r.id}">
-            <div style="font-size:14px;font-weight:700;${done ? 'text-decoration:line-through' : ''}">${esc(r.title)}</div>
-            <div class="xs muted" style="margin-top:3px">${cat.label} · ${r.days?.length === 7 ? 'Every day' : (r.days || []).map(d => DOW[d]).join(', ') || 'Every day'}</div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <div style="font-size:14px;font-weight:700;${isDone ? 'text-decoration:line-through' : ''}">${esc(r.title)}</div>
+              ${isRunning ? `
+                <span style="font-size:9px;font-weight:800;background:var(--green);color:#fff;padding:2px 6px;border-radius:6px;letter-spacing:.4px">● NOW</span>
+              ` : ''}
+            </div>
+            <div class="xs muted" style="margin-top:3px">
+              ${cat.label} · ${isRunning && remaining ? `<b style="color:var(--green)">Ends in ${humanMinutes(remaining)}</b>` : isMissed && r.end && minutesOf(nowHM()) > minutesOf(r.end) ? `<span style="color:#ef4444">Missed</span>` : `${fmtTime(r.start)} – ${fmtTime(r.end)}`}
+            </div>
+            ${isRunning ? `
+              <div class="bar" style="margin-top:6px;height:4px">
+                <i style="width:${progress}%;background:var(--green)"></i>
+              </div>
+            ` : ''}
           </div>
         </div>`;
     }).join('') : `<div class="empty"><span class="big">🕐</span>No routine items for today.</div>`}
   `;
 }
-
 /* ================================================================
    11. VIEW — GOALS
    ================================================================ */
