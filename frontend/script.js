@@ -126,15 +126,10 @@ function seedSampleData() {
   S.tasks = [
     { id: uid(), title: 'DAA — Dijkstra Algorithm', desc: 'Revise + solve 3 problems', date: t, time: '14:00', priority: 'high',   category: 'study',      repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '', pinned: false, createdAt: Date.now() },
     { id: uid(), title: 'HTML Practice',            desc: 'Build a landing page',     date: t, time: '16:00', priority: 'medium', category: 'coding',     repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '', pinned: false, createdAt: Date.now() },
-    { id: uid(), title: 'CN Revision — Unit 3',     desc: 'Transport layer notes',    date: t, time: '19:00', priority: 'high',   category: 'study',      repeat: 'none', remind: '15', done: false, goalId: '', subjectId: '', pinned: false, createdAt: Date.now() },
-    { id: uid(), title: 'Submit DAA Assignment',    desc: 'Upload on portal',         date: t, time: '21:00', priority: 'high',   category: 'assignment', repeat: 'none', remind: '30', done: false, goalId: '', subjectId: '', pinned: false, createdAt: Date.now() },
   ];
   S.routines = [
     { id: uid(), title: 'Wake Up',   start: '06:30', end: '06:45', icon: '🌅', category: 'personal', days: [0,1,2,3,4,5,6] },
-    { id: uid(), title: 'Breakfast', start: '08:00', end: '08:30', icon: '🍳', category: 'personal', days: [0,1,2,3,4,5,6] },
-    { id: uid(), title: 'College',   start: '09:00', end: '13:00', icon: '🎓', category: 'college',  days: [1,2,3,4,5] },
     { id: uid(), title: 'Study',     start: '14:00', end: '16:00', icon: '📚', category: 'study',    days: [0,1,2,3,4,5,6] },
-    { id: uid(), title: 'Sleep',     start: '23:00', end: '23:30', icon: '😴', category: 'personal', days: [0,1,2,3,4,5,6] },
   ];
   S.goals = [
     {
@@ -143,8 +138,6 @@ function seedSampleData() {
       milestones: [
         { id: uid(), title: 'Java Basics', done: false },
         { id: uid(), title: 'OOP',         done: false },
-        { id: uid(), title: 'Collections', done: false },
-        { id: uid(), title: 'Project',     done: false },
       ],
     },
   ];
@@ -157,13 +150,12 @@ function seedSampleData() {
       units: [
         { id: uid(), name: 'Unit 1 — Foundations', topics: [
           { id: uid(), name: 'Asymptotic Notation', done: false },
-          { id: uid(), name: 'Recurrence Relations', done: false },
         ]},
       ],
     },
   ];
   S.notes = [
-    { id: uid(), title: 'Welcome to StudyMate!', content: 'Yeh sample data hai.\nAap apne tasks, goals aur notes add kar sakte ho.', pinned: true, tags: [], createdAt: Date.now() },
+    { id: uid(), title: 'Welcome to StudyMate!', content: 'Yeh sample data hai.', subjectId: '', pinned: true, tags: [], createdAt: Date.now(), attachment: null, attachmentName: null },
   ];
   save();
 }
@@ -202,26 +194,20 @@ function isRoutineDone(id, dateISO) { return !!S.routineLog[`${id}:${dateISO}`];
 
 function routineTimeStatus(r, dateISO) {
   if (!r.start || !r.end) return { status: 'upcoming', progress: 0 };
-  
   const today = todayISO();
   const nowM = minutesOf(nowHM());
   const startM = minutesOf(r.start);
   const endM = minutesOf(r.end);
   const done = isRoutineDone(r.id, dateISO);
-  
   if (done) return { status: 'done', progress: 100 };
-  
   if (dateISO < today) return { status: 'missed', progress: 0 };
   if (dateISO > today) return { status: 'upcoming', progress: 0 };
-  
   if (nowM < startM) return { status: 'upcoming', progress: 0 };
   if (nowM >= endM) return { status: 'missed', progress: 0 };
-  
   const duration = endM - startM;
   const elapsed = nowM - startM;
   const progress = Math.round((elapsed / duration) * 100);
   const remaining = endM - nowM;
-  
   return { status: 'running', progress, remaining };
 }
 
@@ -347,9 +333,6 @@ function renderAuth() {
           <input name="mainGoal" placeholder="e.g. Internship Preparation">
         </label>
         <button class="btn primary block" type="submit" style="margin-top:6px">Get Started →</button>
-        <p class="xs muted" style="text-align:center;margin-top:12px">
-          Aapka data empty se shuru hoga. Jaise aap tasks add karenge waise progress badhega.
-        </p>
       </form>
     </div>`;
 
@@ -479,7 +462,6 @@ function renderHome() {
     <div class="card" style="text-align:center;padding:24px;border-color:rgba(108,140,255,.4);background:rgba(108,140,255,.08)">
       <div style="font-size:42px">🎉</div>
       <div style="font-size:17px;font-weight:800;margin-top:8px">Welcome to StudyMate!</div>
-      <div class="xs muted" style="margin-top:6px">Aapka app bilkul fresh hai. Chaliye pehla task add karte hain.</div>
       <button class="btn primary" data-action="add-task" style="margin-top:14px">＋ Add First Task</button>
     </div>` : ''}
 
@@ -501,7 +483,7 @@ function renderHome() {
       </div>
       ${allToday.length ? `<div class="tlist">
         ${allToday.slice(0, 8).map(taskRowHTML).join('')}
-      </div>` : `<div class="empty"><span class="big">📭</span>No tasks for today.<br>Tap "+ Add" to create one.</div>`}
+      </div>` : `<div class="empty"><span class="big">📭</span>No tasks for today.</div>`}
     </div>
 
     <div class="card">
@@ -578,11 +560,18 @@ function taskRowHTML(task) {
         </div>
       </div>
       ${!inBulk ? `
-        <button
-          data-action="pin-task"
-          data-id="${task.id}"
-          style="width:30px;height:30px;border-radius:50%;background:${task.pinned ? 'var(--accent)' : 'transparent'};border:1px solid ${task.pinned ? 'var(--accent)' : 'transparent'};font-size:13px;display:grid;place-items:center"
-        >${task.pinned ? '📍' : '📌'}</button>
+        <div style="display:flex;align-items:center;gap:4px">
+          <button
+            data-action="pin-task"
+            data-id="${task.id}"
+            style="width:28px;height:28px;border-radius:50%;background:${task.pinned ? 'var(--accent)' : 'transparent'};border:1px solid ${task.pinned ? 'var(--accent)' : 'transparent'};font-size:12px;display:grid;place-items:center;color:${task.pinned ? '#fff' : 'var(--muted)'}"
+          >📌</button>
+          <button
+            data-action="del-task"
+            data-id="${task.id}"
+            style="width:28px;height:28px;border-radius:50%;background:transparent;border:none;font-size:14px;display:grid;place-items:center;color:#ef4444"
+          >🗑️</button>
+        </div>
       ` : ''}
     </div>`;
 }
@@ -716,7 +705,6 @@ function renderRoutine() {
   const doneCount = list.filter(r => isRoutineDone(r.id, t)).length;
   const pct = list.length ? Math.round((doneCount / list.length) * 100) : 0;
 
-  // Weekly mini chart
   const week = [];
   for (let i = 6; i >= 0; i--) {
     const d = addDays(t, -i);
@@ -729,7 +717,6 @@ function renderRoutine() {
   return `
     <div class="section-title">📅 Daily Routine</div>
 
-    <!-- Weekly mini chart -->
     <div class="card">
       <div class="card-head">
         <div class="card-title">This Week</div>
@@ -745,7 +732,6 @@ function renderRoutine() {
       </div>
     </div>
 
-    <!-- Today's progress -->
     <div class="card">
       <div class="card-head">
         <div class="card-title">Today · ${fmtShort(t)}</div>
@@ -759,22 +745,15 @@ function renderRoutine() {
     ${list.length ? list.map(r => {
       const cat = CATEGORIES[r.category] || CATEGORIES.personal;
       const { status, progress, remaining } = routineTimeStatus(r, t);
-      
-      // Style based on status
       const isRunning = status === 'running';
       const isDone = status === 'done';
       const isMissed = status === 'missed';
       
-      const borderColor = isRunning ? 'var(--green)' : isDone ? 'var(--line)' : 'var(--line)';
-      const bgStyle = isRunning 
-        ? 'background:linear-gradient(90deg, rgba(34,197,94,.08), transparent);border-color:var(--green)'
-        : isDone
-          ? 'opacity:.55'
-          : '';
+      const borderColor = isRunning ? 'var(--green)' : 'var(--line)';
+      const bgStyle = isRunning ? 'background:linear-gradient(90deg, rgba(34,197,94,.08), transparent);' : isDone ? 'opacity:.55' : '';
       
       return `
-        <div class="rt-item" style="${bgStyle};border:1px solid ${borderColor};position:relative;overflow:hidden">
-          <!-- Category color bar -->
+        <div class="rt-item" style="${bgStyle}border:1px solid ${borderColor};position:relative;overflow:hidden">
           <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${cat.color || 'var(--accent)'}"></div>
           
           <button class="check ${isDone ? 'on' : ''}" data-action="toggle-routine" data-id="${r.id}" style="margin-left:6px">
@@ -791,19 +770,15 @@ function renderRoutine() {
           <div style="flex:1;min-width:0" data-action="edit-routine" data-id="${r.id}">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               <div style="font-size:14px;font-weight:700;${isDone ? 'text-decoration:line-through' : ''}">${esc(r.title)}</div>
-              ${isRunning ? `
-                <span style="font-size:9px;font-weight:800;background:var(--green);color:#fff;padding:2px 6px;border-radius:6px;letter-spacing:.4px">● NOW</span>
-              ` : ''}
+              ${isRunning ? `<span style="font-size:9px;font-weight:800;background:var(--green);color:#fff;padding:2px 6px;border-radius:6px">● NOW</span>` : ''}
             </div>
             <div class="xs muted" style="margin-top:3px">
-              ${cat.label} · ${isRunning && remaining ? `<b style="color:var(--green)">Ends in ${humanMinutes(remaining)}</b>` : isMissed && r.end && minutesOf(nowHM()) > minutesOf(r.end) ? `<span style="color:#ef4444">Missed</span>` : `${fmtTime(r.start)} – ${fmtTime(r.end)}`}
+              ${cat.label} · ${isRunning && remaining ? `<b style="color:var(--green)">Ends in ${humanMinutes(remaining)}</b>` : isMissed ? `<span style="color:#ef4444">Missed</span>` : `${fmtTime(r.start)} – ${fmtTime(r.end)}`}
             </div>
-            ${isRunning ? `
-              <div class="bar" style="margin-top:6px;height:4px">
-                <i style="width:${progress}%;background:var(--green)"></i>
-              </div>
-            ` : ''}
+            ${isRunning ? `<div class="bar" style="margin-top:6px;height:4px"><i style="width:${progress}%;background:var(--green)"></i></div>` : ''}
           </div>
+          
+          <button class="icon-btn" data-action="del-routine" data-id="${r.id}" style="background:transparent;color:#ef4444;font-size:16px;margin-right:4px">🗑️</button>
         </div>`;
     }).join('') : `<div class="empty"><span class="big">🕐</span>No routine items for today.</div>`}
   `;
@@ -813,7 +788,6 @@ function renderRoutine() {
    11. VIEW — GOALS
    ================================================================ */
 function renderGoals() {
-  // Weekly goal progress
   const week = [];
   for (let i = 6; i >= 0; i--) {
     const d = addDays(todayISO(), -i);
@@ -825,7 +799,6 @@ function renderGoals() {
     week.push({ date: d, pct: score });
   }
 
-  // Sort goals
   let sorted = [...S.goals];
   if (ui.goalSort === 'deadline') {
     sorted.sort((a, b) => (a.deadline || '9999').localeCompare(b.deadline || '9999'));
@@ -924,9 +897,7 @@ function renderGoals() {
           `).join('') || `<div class="xs muted" style="padding:6px 0">No milestones yet.</div>`}
 
           <div style="display:flex;gap:8px;margin-top:12px">
-            ${!isComplete ? `
-              <button class="btn sm" data-action="goal-focus" data-id="${g.id}">⏱️ Focus</button>
-            ` : ''}
+            ${!isComplete ? `<button class="btn sm" data-action="goal-focus" data-id="${g.id}">⏱️ Focus</button>` : ''}
             <button class="btn sm danger" data-action="del-goal" data-id="${g.id}">Delete</button>
           </div>
         </div>`;
@@ -995,6 +966,8 @@ function renderSubjects() {
       const { total, done, pct } = subjectProgress(s);
       const open = !!ui.expandedSubjects[s.id];
       const mins = S.sessions.filter(x => x.subjectId === s.id).reduce((a, x) => a + x.minutes, 0);
+      const linkedNotes = S.notes.filter(n => n.subjectId === s.id);
+      
       return `
         <div class="subj-card">
           <div class="subj-top">
@@ -1002,7 +975,7 @@ function renderSubjects() {
               <div style="width:38px;height:38px;border-radius:12px;background:${s.color || '#6c8cff'}22;display:grid;place-items:center;font-size:18px">📘</div>
               <div style="min-width:0">
                 <div style="font-size:15px;font-weight:800">${esc(s.name)}</div>
-                <div class="xs muted" style="margin-top:3px">${done}/${total} topics · ${humanMinutes(mins)} studied</div>
+                <div class="xs muted" style="margin-top:3px">${done}/${total} topics · ${humanMinutes(mins)} studied · ${linkedNotes.length} notes</div>
               </div>
             </div>
             <button class="icon-btn" data-action="toggle-subject" data-id="${s.id}">${open ? '▾' : '▸'}</button>
@@ -1014,6 +987,19 @@ function renderSubjects() {
 
           ${open ? `
             <div class="sep"></div>
+            
+            ${linkedNotes.length > 0 ? `
+              <div style="margin-bottom:12px">
+                <div class="xs" style="font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Linked Notes</div>
+                ${linkedNotes.map(n => `
+                  <div class="xs" style="padding:6px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between">
+                    <span>📝 ${esc(n.title)}</span>
+                    ${n.attachment ? '<span style="font-size:10px;color:var(--accent)">📎</span>' : ''}
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+
             ${s.units.map(u => `
               <div style="margin-bottom:12px">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -1295,17 +1281,36 @@ function renderNotes() {
 
     <button class="btn primary block" data-action="add-note" style="margin-bottom:16px">＋ New Note</button>
 
-    ${list.length ? list.map(n => `
+    ${list.length ? list.map(n => {
+      const subject = n.subjectId ? getSubject(n.subjectId) : null;
+      return `
       <div class="note-card">
         <button class="pin ${n.pinned ? 'on' : ''}" data-action="pin-note" data-id="${n.id}">📌</button>
-        <div class="note-title" data-action="edit-note" data-id="${n.id}">${esc(n.title)}</div>
+        
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+          <div class="note-title" data-action="edit-note" data-id="${n.id}">${esc(n.title)}</div>
+          ${subject ? `<span style="font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;background:${subject.color}22;color:${subject.color}">${esc(subject.name)}</span>` : ''}
+        </div>
+
         <div class="note-body">${esc((n.content || '').slice(0, 180))}${(n.content || '').length > 180 ? '…' : ''}</div>
+        
+        ${n.attachment ? `
+          <div style="margin-top:10px;border-radius:8px;overflow:hidden;border:1px solid var(--line)">
+            ${n.attachment.startsWith('data:image') 
+              ? `<img src="${n.attachment}" style="width:100%;max-height:200px;object-fit:cover;display:block">` 
+              : `<div style="padding:12px;text-align:center;background:var(--card2);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px">
+                   📎 ${esc(n.attachmentName || 'Attachment')}
+                 </div>`
+            }
+          </div>
+        ` : ''}
+
         <div style="display:flex;gap:8px;margin-top:12px">
           <button class="btn sm" data-action="edit-note" data-id="${n.id}">Edit</button>
           <button class="btn sm danger" data-action="del-note" data-id="${n.id}">Delete</button>
         </div>
       </div>
-    `).join('') : `<div class="empty"><span class="big">📝</span>No notes yet.</div>`}
+    `}).join('') : `<div class="empty"><span class="big">📝</span>No notes yet.</div>`}
   `;
 }
 
@@ -1552,7 +1557,7 @@ function renderSettings() {
     <div class="card" style="text-align:center">
       <div style="font-size:26px">🎓</div>
       <div style="font-weight:800;margin-top:6px">StudyMate</div>
-      <div class="xs muted" style="margin-top:4px">Version 1.2 · Enhanced Tasks & Goals</div>
+      <div class="xs muted" style="margin-top:4px">Version 1.3 · Notes & Attachments</div>
     </div>
   `;
 }
@@ -1639,22 +1644,11 @@ function taskModal(task) {
       };
       if (!data.title) return false;
 
-      if (task) {
-        Object.assign(task, data);
-      } else {
-        S.tasks.push({
-          id: uid(),
-          done: false,
-          pinned: false,
-          subjectId: '',
-          createdAt: Date.now(),
-          ...data
-        });
-      }
+      if (task) Object.assign(task, data);
+      else S.tasks.push({ id: uid(), done: false, pinned: false, subjectId: '', createdAt: Date.now(), ...data });
 
       markActivity();
-      save();
-      render();
+      save(); render();
       toast(task ? 'Task updated' : 'Task added ✅');
     },
   });
@@ -1708,8 +1702,7 @@ function routineModal(item) {
       if (!data.title) return false;
       if (item) Object.assign(item, data);
       else S.routines.push({ id: uid(), ...data });
-      save();
-      render();
+      save(); render();
       toast(item ? 'Routine updated' : 'Routine added 📅');
     },
   });
@@ -1758,11 +1751,8 @@ function goalModal(goal) {
       <label>Category
         <select name="category">
           ${opts(['study', 'career', 'health', 'personal', 'skill'], g.category || 'study', {
-            study: '📚 Study',
-            career: '💼 Career',
-            health: '🏃 Health',
-            personal: '👤 Personal',
-            skill: '🎓 Skill'
+            study: '📚 Study', career: '💼 Career', health: '🏃 Health',
+            personal: '👤 Personal', skill: '🎓 Skill'
           })}
         </select>
       </label>
@@ -1780,8 +1770,7 @@ function goalModal(goal) {
       if (!data.title) return false;
       if (goal) Object.assign(goal, data);
       else S.goals.push({ id: uid(), milestones: [], progress: 0, createdAt: Date.now(), ...data });
-      save();
-      render();
+      save(); render();
       toast(goal ? 'Goal updated' : 'Goal created 🎯');
     },
   });
@@ -1832,14 +1821,10 @@ function reminderModal(rem) {
              : [],
         enabled: rem ? rem.enabled : true,
       };
-      if (!data.title || !data.time) {
-        toast('Please enter a title and time.');
-        return false;
-      }
+      if (!data.title || !data.time) { toast('Title and time required.'); return false; }
       if (rem) Object.assign(rem, data);
       else S.reminders.push({ id: uid(), ...data });
-      save();
-      render();
+      save(); render();
       toast(rem ? 'Reminder updated' : 'Reminder set 🔔');
     },
   });
@@ -1847,9 +1832,7 @@ function reminderModal(rem) {
   setTimeout(() => {
     const sel = $('#modal-form select[name="repeat"]');
     const box = $('#customDays');
-    sel?.addEventListener('change', () => {
-      box.classList.toggle('hidden', sel.value !== 'custom');
-    });
+    sel?.addEventListener('change', () => { box.classList.toggle('hidden', sel.value !== 'custom'); });
     const dp = $('#daypicker');
     dp?.addEventListener('click', e => {
       const btn = e.target.closest('[data-day]');
@@ -1881,15 +1864,14 @@ function subjectModal() {
       const name = fd.get('name').trim();
       if (!name) return false;
       S.subjects.push({ id: uid(), name, color: fd.get('color'), units: [] });
-      save();
-      render();
+      save(); render();
       toast('Subject added 📚');
     },
   });
 }
 
 function noteModal(note) {
-  const n = note || { title: '', content: '', pinned: false, tags: [] };
+  const n = note || { title: '', content: '', subjectId: '', attachment: null, attachmentName: null };
   openModal({
     title: note ? 'Edit Note' : 'New Note',
     body: `
@@ -1897,19 +1879,56 @@ function noteModal(note) {
         <input name="title" required value="${esc(n.title)}" placeholder="e.g. DAA Important Questions">
       </label>
       <label>Content
-        <textarea name="content" rows="7" placeholder="Write anything...">${esc(n.content || '')}</textarea>
+        <textarea name="content" rows="4" placeholder="Write anything...">${esc(n.content || '')}</textarea>
       </label>
+      <label>Link to Subject
+        <select name="subjectId">
+          <option value="">— none —</option>
+          ${S.subjects.map(s => `<option value="${s.id}" ${n.subjectId === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
+        </select>
+      </label>
+      <label>Attachment (Image / PDF)
+        <input type="file" name="attachment" accept="image/*,application/pdf" style="padding:8px">
+      </label>
+      ${n.attachment ? `<div class="xs muted" style="margin-bottom:8px">Current: ${esc(n.attachmentName || 'File')}</div>` : ''}
     `,
     submit: note ? 'Save Changes' : 'Add Note',
     onSubmit(fd) {
       const title = fd.get('title').trim();
       const content = fd.get('content');
+      const subjectId = fd.get('subjectId');
+      const file = fd.get('attachment');
+
       if (!title) return false;
-      if (note) Object.assign(note, { title, content });
-      else S.notes.push({ id: uid(), title, content, pinned: false, tags: [], createdAt: Date.now() });
-      save();
-      render();
-      toast(note ? 'Note updated' : 'Note saved 📝');
+
+      const processNote = (attachmentData = null, attachmentName = null) => {
+        if (note) {
+          Object.assign(note, { title, content, subjectId });
+          if (attachmentData) { note.attachment = attachmentData; note.attachmentName = attachmentName; }
+        } else {
+          S.notes.push({
+            id: uid(), title, content, subjectId,
+            pinned: false, tags: [], createdAt: Date.now(),
+            attachment: attachmentData, attachmentName: attachmentName
+          });
+        }
+        save(); render();
+        toast(note ? 'Note updated' : 'Note saved 📝');
+        closeModal();
+      };
+
+      if (file && file.size > 0) {
+        if (file.size > 2 * 1024 * 1024) {
+          toast('File too large. Max 2MB.');
+          return false;
+        }
+        const reader = new FileReader();
+        reader.onload = () => processNote(reader.result, file.name);
+        reader.readAsDataURL(file);
+        return false;
+      } else {
+        processNote();
+      }
     },
   });
 }
@@ -1920,44 +1939,23 @@ function profileModal() {
   openModal({
     title: 'Edit Profile',
     body: `
-      <label>Name
-        <input name="name" value="${esc(u.name)}" required>
-      </label>
-      <label>Email
-        <input name="email" type="email" value="${esc(u.email || '')}">
-      </label>
+      <label>Name <input name="name" value="${esc(u.name)}" required></label>
+      <label>Email <input name="email" type="email" value="${esc(u.email || '')}"></label>
       <div class="row">
-        <label>Course
-          <input name="course" value="${esc(u.course || '')}" placeholder="B.Tech">
-        </label>
-        <label>Year
-          <select name="year">
-            ${opts(['1st Year','2nd Year','3rd Year','4th Year','Postgraduate','Other'], u.year || '3rd Year')}
-          </select>
-        </label>
+        <label>Course <input name="course" value="${esc(u.course || '')}" placeholder="B.Tech"></label>
+        <label>Year <select name="year">${opts(['1st Year','2nd Year','3rd Year','4th Year','Postgraduate','Other'], u.year || '3rd Year')}</select></label>
       </div>
-      <label>Main goal
-        <input name="mainGoal" value="${esc(u.mainGoal || '')}" placeholder="e.g. Internship Preparation">
-      </label>
-      <label>Avatar
-        <select name="avatar">
-          ${avatars.map(a => `<option value="${a}" ${u.avatar === a ? 'selected' : ''}>${a}</option>`).join('')}
-        </select>
-      </label>
+      <label>Main goal <input name="mainGoal" value="${esc(u.mainGoal || '')}" placeholder="e.g. Internship Preparation"></label>
+      <label>Avatar <select name="avatar">${avatars.map(a => `<option value="${a}" ${u.avatar === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
     `,
     submit: 'Save',
     onSubmit(fd) {
       Object.assign(S.user, {
         name: fd.get('name').trim() || 'Student',
-        email: fd.get('email').trim(),
-        course: fd.get('course').trim(),
-        year: fd.get('year'),
-        mainGoal: fd.get('mainGoal').trim(),
-        avatar: fd.get('avatar'),
+        email: fd.get('email').trim(), course: fd.get('course').trim(),
+        year: fd.get('year'), mainGoal: fd.get('mainGoal').trim(), avatar: fd.get('avatar'),
       });
-      save();
-      render();
-      updateDrawerHeader();
+      save(); render(); updateDrawerHeader();
       toast('Profile updated ✅');
     },
   });
@@ -1980,46 +1978,11 @@ function quickAddSheet() {
 
 function goalTemplates() {
   const templates = [
-    {
-      title: 'Learn Java',
-      desc: 'Complete Java from basics to project',
-      dailyTarget: 45,
-      color: '#6c8cff',
-      category: 'skill',
-      milestones: ['Java Basics', 'OOP', 'Collections', 'Exception Handling', 'File Handling', 'Project']
-    },
-    {
-      title: 'Master DSA',
-      desc: 'Solve 200+ DSA problems',
-      dailyTarget: 60,
-      color: '#8b5cf6',
-      category: 'study',
-      milestones: ['Arrays & Strings', 'Linked Lists', 'Trees', 'Graphs', 'DP', '200 Problems']
-    },
-    {
-      title: 'Prepare for Internship',
-      desc: 'DSA + Projects + Resume',
-      dailyTarget: 60,
-      color: '#06b6d4',
-      category: 'career',
-      milestones: ['Java', 'DSA', 'SQL', 'Projects', 'Resume', 'Mock Interviews']
-    },
-    {
-      title: 'Improve Coding',
-      desc: 'Daily coding practice',
-      dailyTarget: 30,
-      color: '#22c55e',
-      category: 'skill',
-      milestones: ['HTML/CSS', 'JavaScript', 'React', 'Node.js', 'Projects']
-    },
-    {
-      title: 'Stay Fit',
-      desc: 'Exercise daily',
-      dailyTarget: 30,
-      color: '#f59e0b',
-      category: 'health',
-      milestones: ['30 min exercise/day', 'Diet tracking', 'Sleep 7+ hrs']
-    }
+    { title: 'Learn Java', desc: 'Complete Java from basics to project', dailyTarget: 45, color: '#6c8cff', category: 'skill', milestones: ['Java Basics', 'OOP', 'Collections', 'Exception Handling', 'File Handling', 'Project'] },
+    { title: 'Master DSA', desc: 'Solve 200+ DSA problems', dailyTarget: 60, color: '#8b5cf6', category: 'study', milestones: ['Arrays & Strings', 'Linked Lists', 'Trees', 'Graphs', 'DP', '200 Problems'] },
+    { title: 'Prepare for Internship', desc: 'DSA + Projects + Resume', dailyTarget: 60, color: '#06b6d4', category: 'career', milestones: ['Java', 'DSA', 'SQL', 'Projects', 'Resume', 'Mock Interviews'] },
+    { title: 'Improve Coding', desc: 'Daily coding practice', dailyTarget: 30, color: '#22c55e', category: 'skill', milestones: ['HTML/CSS', 'JavaScript', 'React', 'Node.js', 'Projects'] },
+    { title: 'Stay Fit', desc: 'Exercise daily', dailyTarget: 30, color: '#f59e0b', category: 'health', milestones: ['30 min exercise/day', 'Diet tracking', 'Sleep 7+ hrs'] }
   ];
   
   openModal({
@@ -2028,15 +1991,8 @@ function goalTemplates() {
     body: `
       <p class="xs muted" style="margin-bottom:12px">Quick-start with ready-made goals:</p>
       ${templates.map((tpl, idx) => `
-        <button
-          class="sheet-item"
-          data-action="add-template-goal"
-          data-idx="${idx}"
-          style="border:1px solid var(--line);margin-bottom:8px;border-radius:12px;background:var(--card2)"
-        >
-          <div style="width:44px;height:44px;border-radius:12px;background:${tpl.color}22;display:grid;place-items:center;font-size:20px;flex-shrink:0">
-            ${CATEGORIES[tpl.category]?.icon || '🎯'}
-          </div>
+        <button class="sheet-item" data-action="add-template-goal" data-idx="${idx}" style="border:1px solid var(--line);margin-bottom:8px;border-radius:12px;background:var(--card2)">
+          <div style="width:44px;height:44px;border-radius:12px;background:${tpl.color}22;display:grid;place-items:center;font-size:20px;flex-shrink:0">${CATEGORIES[tpl.category]?.icon || '🎯'}</div>
           <div style="flex:1;text-align:left;min-width:0">
             <div style="font-size:14.5px;font-weight:750">${esc(tpl.title)}</div>
             <div class="xs muted" style="margin-top:2px">${esc(tpl.desc)}</div>
@@ -2047,7 +2003,6 @@ function goalTemplates() {
       `).join('')}
     `
   });
-  
   window._goalTemplates = templates;
 }
 
@@ -2066,10 +2021,7 @@ async function registerStudyMateServiceWorker() {
     await navigator.serviceWorker.ready;
     studyMateSW = await navigator.serviceWorker.getRegistration('/');
     return studyMateSW;
-  } catch (error) {
-    studyMateSW = null;
-    return null;
-  }
+  } catch (error) { studyMateSW = null; return null; }
 }
 
 async function enableNotifications() {
@@ -2079,16 +2031,12 @@ async function enableNotifications() {
     await registerStudyMateServiceWorker();
     let permission = Notification.permission;
     if (permission === 'default') permission = await Notification.requestPermission();
-    
     if (permission !== 'granted') {
-      S.settings.notify = false;
-      save();
+      S.settings.notify = false; save();
       toast(permission === 'denied' ? '❌ Notifications blocked in settings.' : 'Permission not granted.');
-      render();
-      return false;
+      render(); return false;
     }
-    S.settings.notify = true;
-    save();
+    S.settings.notify = true; save();
     startNotificationLoop();
     const success = await notify('🎓 StudyMate', 'Notifications are working!');
     render();
@@ -2134,8 +2082,7 @@ function checkDueNotifications() {
     const dueMinutes = minutesOf(r.time);
     const key = `rem:${r.id}:${today}:${r.time}`;
     if (currentMinutes >= dueMinutes && currentMinutes - dueMinutes <= 30 && !S.fired[key]) {
-      S.fired[key] = true;
-      save();
+      S.fired[key] = true; save();
       notify('🔔 ' + r.title, 'Scheduled for ' + fmtTime(r.time));
     }
   });
@@ -2146,8 +2093,7 @@ function checkDueNotifications() {
     const dueMinutes = minutesOf(t.time) - minutesBefore;
     const key = `task:${t.id}:${today}:${t.remind}`;
     if (currentMinutes >= dueMinutes && currentMinutes - dueMinutes <= 30 && !S.fired[key]) {
-      S.fired[key] = true;
-      save();
+      S.fired[key] = true; save();
       notify('⏰ ' + t.title, 'Starts at ' + fmtTime(t.time));
     }
   });
@@ -2201,56 +2147,52 @@ document.addEventListener('click', e => {
     case 'add-subject': closeModal(); setTimeout(() => subjectModal(), 260); break;
 
     case 'toggle-task': {
-      const task = getTask(id);
-      if (!task) break;
+      const task = getTask(id); if (!task) break;
       task.done = !task.done;
       if (task.done) {
         markActivity();
         if (task.repeat && task.repeat !== 'none') {
           const next = { ...task, id: uid(), done: false, synced: false };
           next.date = task.repeat === 'daily' ? addDays(task.date, 1)
-                    : task.repeat === 'weekdays' ? nextWeekday(task.date)
-                    : addDays(task.date, 7);
+                    : task.repeat === 'weekdays' ? nextWeekday(task.date) : addDays(task.date, 7);
           S.tasks.push(next);
         }
       }
-      save(); render();
-      break;
+      save(); render(); break;
     }
     case 'edit-task': taskModal(getTask(id)); break;
-    case 'task-filter': ui.taskFilter = el.dataset.filter; render(); break;
+    case 'del-task':
+      if (confirm('Delete this task?')) {
+        S.tasks = S.tasks.filter(t => t.id !== id);
+        save(); render(); toast('Task deleted 🗑️');
+      }
+      break;
 
+    case 'task-filter': ui.taskFilter = el.dataset.filter; render(); break;
     case 'task-sort': ui.taskSort = el.value; render(); break;
     case 'task-clear-search': ui.taskSearch = ''; render(); break;
-    
     case 'task-quick-filter': {
       const qf = el.dataset.qf;
       ui.taskQuickFilter = (ui.taskQuickFilter === qf) ? '' : qf;
-      render();
-      break;
+      render(); break;
     }
     case 'task-clear-quick': ui.taskQuickFilter = ''; render(); break;
 
     case 'pin-task': {
-      const task = getTask(id);
-      if (!task) break;
-      task.pinned = !task.pinned;
-      save(); render();
+      const task = getTask(id); if (!task) break;
+      task.pinned = !task.pinned; save(); render();
       toast(task.pinned ? 'Task pinned 📌' : 'Task unpinned');
       break;
     }
 
     case 'bulk-enter': ui.bulkMode = true; ui.selectedTasks = []; render(); break;
     case 'bulk-cancel': ui.bulkMode = false; ui.selectedTasks = []; render(); break;
-
     case 'bulk-toggle': {
       const idx = ui.selectedTasks.indexOf(id);
       if (idx >= 0) ui.selectedTasks.splice(idx, 1);
       else ui.selectedTasks.push(id);
-      render();
-      break;
+      render(); break;
     }
-
     case 'bulk-complete': {
       if (!ui.selectedTasks.length) { toast('No tasks selected'); break; }
       let count = 0;
@@ -2260,28 +2202,30 @@ document.addEventListener('click', e => {
       });
       if (count > 0) markActivity();
       save(); toast(`${count} tasks completed ✅`);
-      ui.bulkMode = false; ui.selectedTasks = []; render();
-      break;
+      ui.bulkMode = false; ui.selectedTasks = []; render(); break;
     }
-
     case 'bulk-delete': {
       if (!ui.selectedTasks.length) { toast('No tasks selected'); break; }
       if (!confirm(`Delete ${ui.selectedTasks.length} task(s)?`)) break;
       const count = ui.selectedTasks.length;
       S.tasks = S.tasks.filter(t => !ui.selectedTasks.includes(t.id));
       save(); toast(`${count} tasks deleted 🗑️`);
-      ui.bulkMode = false; ui.selectedTasks = []; render();
-      break;
+      ui.bulkMode = false; ui.selectedTasks = []; render(); break;
     }
 
     case 'toggle-routine': {
       const key = `${id}:${todayISO()}`;
       S.routineLog[key] = !S.routineLog[key];
       if (S.routineLog[key]) markActivity();
-      save(); render();
-      break;
+      save(); render(); break;
     }
     case 'edit-routine': routineModal(getRoutine(id)); break;
+    case 'del-routine':
+      if (confirm('Delete this routine item?')) {
+        S.routines = S.routines.filter(r => r.id !== id);
+        save(); render(); toast('Routine item deleted 🗑️');
+      }
+      break;
 
     case 'goal-sort': ui.goalSort = el.value; render(); break;
     case 'goal-templates': goalTemplates(); break;
@@ -2292,20 +2236,14 @@ document.addEventListener('click', e => {
       closeModal();
       setTimeout(() => {
         S.goals.push({
-          id: uid(),
-          title: tpl.title,
-          desc: tpl.desc,
-          deadline: addDays(todayISO(), 60),
-          dailyTarget: tpl.dailyTarget,
-          color: tpl.color,
-          category: tpl.category,
-          progress: 0,
+          id: uid(), title: tpl.title, desc: tpl.desc,
+          deadline: addDays(todayISO(), 60), dailyTarget: tpl.dailyTarget,
+          color: tpl.color, category: tpl.category, progress: 0,
           milestones: tpl.milestones.map(m => ({ id: uid(), title: m, done: false })),
           createdAt: Date.now(),
         });
         save(); render(); toast(`🎯 ${tpl.title} added!`);
-      }, 260);
-      break;
+      }, 260); break;
     }
 
     case 'edit-goal': goalModal(getGoal(id)); break;
@@ -2327,14 +2265,12 @@ document.addEventListener('click', e => {
           g.milestones.push({ id: uid(), title, done: false });
           save(); render(); toast('Milestone added');
         },
-      });
-      break;
+      }); break;
     }
     case 'del-milestone': {
       const g = getGoal(el.dataset.goal);
       g.milestones = g.milestones.filter(x => x.id !== el.dataset.ms);
-      save(); render();
-      break;
+      save(); render(); break;
     }
     case 'del-goal':
       if (confirm('Delete this goal? This cannot be undone.')) {
@@ -2342,18 +2278,13 @@ document.addEventListener('click', e => {
         save(); render(); toast('Goal deleted');
       }
       break;
-    case 'goal-focus': {
-      timer.subjectId = '';
-      timer.topic = getGoal(id)?.title || '';
-      navigate('focus');
-      break;
-    }
+    case 'goal-focus':
+      timer.subjectId = ''; timer.topic = getGoal(id)?.title || '';
+      navigate('focus'); break;
 
     case 'toggle-reminder': {
-      const r = getReminder(id);
-      r.enabled = !r.enabled;
-      save(); render();
-      break;
+      const r = getReminder(id); r.enabled = !r.enabled;
+      save(); render(); break;
     }
     case 'edit-reminder': reminderModal(getReminder(id)); break;
     case 'enable-notify': enableNotifications(); break;
@@ -2364,8 +2295,7 @@ document.addEventListener('click', e => {
         notify('🎓 StudyMate', 'This is a test notification.').then(sent => {
           toast(sent ? 'Test notification sent!' : 'Test failed.');
         });
-      }
-      break;
+      } break;
     }
 
     case 'toggle-subject': ui.expandedSubjects[id] = !ui.expandedSubjects[id]; render(); break;
@@ -2376,20 +2306,16 @@ document.addEventListener('click', e => {
         body: `<label>Unit name <input name="name" required placeholder="e.g. Unit 3 — Trees"></label>`,
         submit: 'Add Unit',
         onSubmit(fd) {
-          const name = fd.get('name').trim();
-          if (!name) return false;
+          const name = fd.get('name').trim(); if (!name) return false;
           s.units.push({ id: uid(), name, topics: [] });
-          ui.expandedSubjects[s.id] = true;
-          save(); render();
+          ui.expandedSubjects[s.id] = true; save(); render();
         },
-      });
-      break;
+      }); break;
     }
     case 'del-unit': {
       const s = getSubject(el.dataset.subject);
       s.units = s.units.filter(u => u.id !== el.dataset.unit);
-      save(); render();
-      break;
+      save(); render(); break;
     }
     case 'add-topic': {
       const s = getSubject(el.dataset.subject);
@@ -2399,38 +2325,30 @@ document.addEventListener('click', e => {
         body: `<label>Topic name <input name="name" required placeholder="e.g. AVL Trees"></label>`,
         submit: 'Add Topic',
         onSubmit(fd) {
-          const name = fd.get('name').trim();
-          if (!name) return false;
+          const name = fd.get('name').trim(); if (!name) return false;
           u.topics.push({ id: uid(), name, done: false });
           save(); render();
         },
-      });
-      break;
+      }); break;
     }
     case 'toggle-topic': {
       const s = getSubject(el.dataset.subject);
       const u = s.units.find(x => x.id === el.dataset.unit);
       const tp = u?.topics.find(x => x.id === el.dataset.topic);
-      if (tp) {
-        tp.done = !tp.done;
-        if (tp.done) markActivity();
-        save(); render();
-      }
+      if (tp) { tp.done = !tp.done; if (tp.done) markActivity(); save(); render(); }
       break;
     }
     case 'del-topic': {
       const s = getSubject(el.dataset.subject);
       const u = s.units.find(x => x.id === el.dataset.unit);
       u.topics = u.topics.filter(x => x.id !== el.dataset.topic);
-      save(); render();
-      break;
+      save(); render(); break;
     }
     case 'del-subject':
       if (confirm('Delete this subject and all its topics?')) {
         S.subjects = S.subjects.filter(s => s.id !== id);
         save(); render(); toast('Subject deleted');
-      }
-      break;
+      } break;
     case 'subject-focus': timer.subjectId = id; navigate('focus'); break;
 
     case 'timer-toggle': timer.running ? pauseTimer() : startTimer(); break;
@@ -2438,24 +2356,12 @@ document.addEventListener('click', e => {
     case 'timer-preset': {
       pauseTimer();
       const m = Number(el.dataset.min);
-      timer.mode = 'focus';
-      timer.total = m * 60;
-      timer.remaining = m * 60;
-      updateTimerUI();
-      toast(`Set to ${m} minutes`);
-      break;
+      timer.mode = 'focus'; timer.total = m * 60; timer.remaining = m * 60;
+      updateTimerUI(); toast(`Set to ${m} minutes`); break;
     }
 
-    case 'cal-prev':
-      ui.calMonth--;
-      if (ui.calMonth < 0) { ui.calMonth = 11; ui.calYear--; }
-      render();
-      break;
-    case 'cal-next':
-      ui.calMonth++;
-      if (ui.calMonth > 11) { ui.calMonth = 0; ui.calYear++; }
-      render();
-      break;
+    case 'cal-prev': ui.calMonth--; if (ui.calMonth < 0) { ui.calMonth = 11; ui.calYear--; } render(); break;
+    case 'cal-next': ui.calMonth++; if (ui.calMonth > 11) { ui.calMonth = 0; ui.calYear++; } render(); break;
     case 'cal-select': ui.calSelected = el.dataset.date; render(); break;
 
     case 'edit-note': noteModal(getNote(id)); break;
@@ -2463,53 +2369,38 @@ document.addEventListener('click', e => {
       if (confirm('Delete this note?')) {
         S.notes = S.notes.filter(n => n.id !== id);
         save(); render();
-      }
-      break;
+      } break;
     case 'pin-note': {
-      const n = getNote(id);
-      n.pinned = !n.pinned;
-      save(); render();
-      break;
+      const n = getNote(id); n.pinned = !n.pinned;
+      save(); render(); break;
     }
 
     case 'edit-profile': profileModal(); break;
     case 'toggle-weekstart': S.settings.weekStart = S.settings.weekStart === 1 ? 0 : 1; save(); render(); break;
-    
     case 'sync-backend': syncWithBackend(); break;
-    
     case 'export-data': {
       const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a2 = document.createElement('a');
-      a2.href = url;
-      a2.download = `studymate-backup-${todayISO()}.json`;
-      a2.click();
-      URL.revokeObjectURL(url);
-      toast('Backup downloaded ⬇️');
-      break;
+      a2.href = url; a2.download = `studymate-backup-${todayISO()}.json`; a2.click();
+      URL.revokeObjectURL(url); toast('Backup downloaded ⬇️'); break;
     }
     case 'import-data': $('#importFile').click(); break;
     case 'load-sample':
       if (confirm('Load sample data? This will replace your current data.')) {
-        S = defaultState();
-        seedSampleData();
-        save(); render(); updateDrawerHeader();
+        S = defaultState(); seedSampleData(); save(); render(); updateDrawerHeader();
         toast('Sample data loaded 🎲');
-      }
-      break;
+      } break;
     case 'reset-data':
       if (confirm('Delete ALL data? This cannot be undone.')) {
         localStorage.removeItem(STORAGE_KEY);
-        S = defaultState();
-        save();
+        S = defaultState(); save();
         location.hash = '';
         $('#shell').classList.add('hidden');
-        renderAuth();
-        $('#auth').classList.remove('hidden');
+        renderAuth(); $('#auth').classList.remove('hidden');
         toast('All data cleared. Reloading...');
         setTimeout(() => location.reload(), 800);
-      }
-      break;
+      } break;
   }
 });
 
@@ -2517,17 +2408,13 @@ document.addEventListener('input', e => {
   const el = e.target.closest('[data-action]');
   if (!el) return;
   if (el.dataset.action === 'note-search') {
-    ui.noteQuery = el.value;
-    const pos = el.selectionStart;
-    render();
-    const next = $('#noteSearch');
+    ui.noteQuery = el.value; const pos = el.selectionStart;
+    render(); const next = $('#noteSearch');
     if (next) { next.focus(); next.setSelectionRange(pos, pos); }
   }
   if (el.dataset.action === 'task-search') {
-    ui.taskSearch = el.value;
-    const pos = el.selectionStart;
-    render();
-    const next = $('#taskSearch');
+    ui.taskSearch = el.value; const pos = el.selectionStart;
+    render(); const next = $('#taskSearch');
     if (next) { next.focus(); next.setSelectionRange(pos, pos); }
   }
 });
@@ -2548,8 +2435,7 @@ document.addEventListener('input', e => {
 
 document.addEventListener('change', e => {
   if (e.target.id !== 'importFile') return;
-  const file = e.target.files[0];
-  if (!file) return;
+  const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
     try {
@@ -2589,20 +2475,14 @@ async function syncWithBackend() {
   try {
     toast('Syncing... ⏳');
     const userId = S.user.email || 'defaultUser';
-    let pushedCount = 0;
-    let pulledCount = 0;
+    let pushedCount = 0; let pulledCount = 0;
 
     for (const task of S.tasks) {
       if (task.synced) continue;
       try {
         const res = await fetch(`${API_URL}/api/tasks`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId, title: task.title, description: task.desc,
-            date: task.date, time: task.time, priority: task.priority,
-            category: task.category, completed: task.done
-          })
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, title: task.title, description: task.desc, date: task.date, time: task.time, priority: task.priority, category: task.category, completed: task.done })
         });
         if (res.ok) { task.synced = true; pushedCount++; }
       } catch (e) { console.error(e); }
@@ -2612,13 +2492,8 @@ async function syncWithBackend() {
       if (goal.synced) continue;
       try {
         const res = await fetch(`${API_URL}/api/goals`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId, title: goal.title, desc: goal.desc,
-            deadline: goal.deadline, dailyTarget: goal.dailyTarget,
-            color: goal.color, milestones: goal.milestones || []
-          })
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, title: goal.title, desc: goal.desc, deadline: goal.deadline, dailyTarget: goal.dailyTarget, color: goal.color, milestones: goal.milestones || [] })
         });
         if (res.ok) { goal.synced = true; pushedCount++; }
       } catch (e) { console.error(e); }
@@ -2628,12 +2503,8 @@ async function syncWithBackend() {
       if (routine.synced) continue;
       try {
         const res = await fetch(`${API_URL}/api/routines`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId, title: routine.title, start: routine.start, end: routine.end,
-            icon: routine.icon, category: routine.category, days: routine.days || []
-          })
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, title: routine.title, start: routine.start, end: routine.end, icon: routine.icon, category: routine.category, days: routine.days || [] })
         });
         if (res.ok) { routine.synced = true; pushedCount++; }
       } catch (e) { console.error(e); }
@@ -2643,12 +2514,8 @@ async function syncWithBackend() {
       if (note.synced) continue;
       try {
         const res = await fetch(`${API_URL}/api/notes`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId, title: note.title, content: note.content,
-            pinned: note.pinned, tags: note.tags || []
-          })
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, title: note.title, content: note.content, pinned: note.pinned, tags: note.tags || [] })
         });
         if (res.ok) { note.synced = true; pushedCount++; }
       } catch (e) { console.error(e); }
@@ -2660,12 +2527,7 @@ async function syncWithBackend() {
       remoteTasks.forEach(rt => {
         const exists = S.tasks.find(t => t.title === rt.title && t.date === rt.date);
         if (!exists) {
-          S.tasks.push({
-            id: rt._id, title: rt.title, desc: rt.description || '',
-            date: rt.date, time: rt.time || '', priority: rt.priority || 'medium',
-            category: rt.category || 'study', done: rt.completed,
-            repeat: 'none', remind: '15', goalId: '', subjectId: '', synced: true
-          });
+          S.tasks.push({ id: rt._id, title: rt.title, desc: rt.description || '', date: rt.date, time: rt.time || '', priority: rt.priority || 'medium', category: rt.category || 'study', done: rt.completed, repeat: 'none', remind: '15', goalId: '', subjectId: '', synced: true });
           pulledCount++;
         }
       });
@@ -2677,12 +2539,7 @@ async function syncWithBackend() {
       remoteGoals.forEach(rg => {
         const exists = S.goals.find(g => g.title === rg.title);
         if (!exists) {
-          S.goals.push({
-            id: rg._id, title: rg.title, desc: rg.desc || '',
-            deadline: rg.deadline || '', dailyTarget: rg.dailyTarget || 0,
-            color: rg.color || '#6c8cff', category: rg.category || 'study',
-            milestones: rg.milestones || [], synced: true
-          });
+          S.goals.push({ id: rg._id, title: rg.title, desc: rg.desc || '', deadline: rg.deadline || '', dailyTarget: rg.dailyTarget || 0, color: rg.color || '#6c8cff', category: rg.category || 'study', milestones: rg.milestones || [], synced: true });
           pulledCount++;
         }
       });
@@ -2694,11 +2551,7 @@ async function syncWithBackend() {
       remoteRoutines.forEach(rr => {
         const exists = S.routines.find(r => r.title === rr.title && r.start === rr.start);
         if (!exists) {
-          S.routines.push({
-            id: rr._id, title: rr.title, start: rr.start, end: rr.end,
-            icon: rr.icon || '📌', category: rr.category || 'personal',
-            days: rr.days || [0,1,2,3,4,5,6], synced: true
-          });
+          S.routines.push({ id: rr._id, title: rr.title, start: rr.start, end: rr.end, icon: rr.icon || '📌', category: rr.category || 'personal', days: rr.days || [0,1,2,3,4,5,6], synced: true });
           pulledCount++;
         }
       });
@@ -2710,18 +2563,13 @@ async function syncWithBackend() {
       remoteNotes.forEach(rn => {
         const exists = S.notes.find(n => n.title === rn.title);
         if (!exists) {
-          S.notes.push({
-            id: rn._id, title: rn.title, content: rn.content || '',
-            pinned: rn.pinned || false, tags: rn.tags || [],
-            createdAt: Date.now(), synced: true
-          });
+          S.notes.push({ id: rn._id, title: rn.title, content: rn.content || '', pinned: rn.pinned || false, tags: rn.tags || [], createdAt: Date.now(), synced: true });
           pulledCount++;
         }
       });
     }
 
-    save();
-    render();
+    save(); render();
     toast(`Synced! Pushed ${pushedCount}, Pulled ${pulledCount} ✅`);
   } catch (err) {
     console.error(err);
@@ -2737,18 +2585,13 @@ function bootApp() {
   $('#shell').classList.remove('hidden');
   document.documentElement.setAttribute('data-theme', S.settings.theme);
   if (!location.hash) location.hash = '#/home';
-  updateDrawerHeader();
-  render();
-  checkAchievements();
+  updateDrawerHeader(); render(); checkAchievements();
   startNotificationLoop();
 }
 
 function init() {
   document.documentElement.setAttribute('data-theme', S.settings.theme);
-  if (!S.user.onboarded) {
-    renderAuth();
-    return;
-  }
+  if (!S.user.onboarded) { renderAuth(); return; }
   bootApp();
 }
 
