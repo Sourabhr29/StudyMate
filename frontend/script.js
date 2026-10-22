@@ -66,6 +66,7 @@ const CATEGORIES = {
   health:     { label: 'Health',     icon: '🏃', color: '#22c55e' },
   personal:   { label: 'Personal',   icon: '👤', color: '#ec4899' },
   career:     { label: 'Career',     icon: '💼', color: '#14b8a6' },
+  skill:      { label: 'Skill',      icon: '🎓', color: '#8b5cf6' },
 };
 const PRIORITIES = { high: '🔴 High', medium: '🟡 Medium', low: '🟢 Low' };
 
@@ -79,17 +80,10 @@ function defaultState() {
     user: { name: '', email: '', course: '', year: '', mainGoal: '', avatar: '🎓', onboarded: false },
     tasks: [], routines: [], goals: [], reminders: [],
     subjects: [], sessions: [], notes: [],
-    routineLog: {},
-    activity: {},
-    fired: {},
-    achievements: [],
+    routineLog: {}, activity: {}, fired: {}, achievements: [],
     settings: {
-      theme: 'dark',
-      notify: false,
-      sound: true,
-      dayStart: '06:00',
-      dayEnd: '23:00',
-      weekStart: 1,
+      theme: 'dark', notify: false, sound: true,
+      dayStart: '06:00', dayEnd: '23:00', weekStart: 1,
     },
   };
 }
@@ -115,6 +109,7 @@ const ui = {
   taskQuickFilter: '',
   bulkMode: false,
   selectedTasks: [],
+  goalSort: 'deadline',
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
   calSelected: todayISO(),
@@ -144,7 +139,7 @@ function seedSampleData() {
   S.goals = [
     {
       id: uid(), title: 'Learn Java', desc: 'Java from basics to project',
-      deadline: `${new Date().getFullYear()}-12-30`, dailyTarget: 45, color: '#6c8cff',
+      deadline: `${new Date().getFullYear()}-12-30`, dailyTarget: 45, color: '#6c8cff', category: 'skill',
       milestones: [
         { id: uid(), title: 'Java Basics', done: false },
         { id: uid(), title: 'OOP',         done: false },
@@ -204,6 +199,7 @@ function routineForDay(dateISO) {
     .sort((a, b) => a.start.localeCompare(b.start));
 }
 function isRoutineDone(id, dateISO) { return !!S.routineLog[`${id}:${dateISO}`]; }
+
 function routineTimeStatus(r, dateISO) {
   if (!r.start || !r.end) return { status: 'upcoming', progress: 0 };
   
@@ -812,25 +808,88 @@ function renderRoutine() {
     }).join('') : `<div class="empty"><span class="big">🕐</span>No routine items for today.</div>`}
   `;
 }
+
 /* ================================================================
    11. VIEW — GOALS
    ================================================================ */
 function renderGoals() {
+  // Weekly goal progress
+  const week = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = addDays(todayISO(), -i);
+    const dayGoalsProgress = S.goals.length
+      ? Math.round(S.goals.reduce((a, g) => a + goalProgress(g), 0) / S.goals.length)
+      : 0;
+    const dayStudyScore = clamp(Math.round(studyMinutesOn(d) / 4), 0, 100);
+    const score = d === todayISO() ? dayGoalsProgress : Math.round(dayStudyScore);
+    week.push({ date: d, pct: score });
+  }
+
+  // Sort goals
+  let sorted = [...S.goals];
+  if (ui.goalSort === 'deadline') {
+    sorted.sort((a, b) => (a.deadline || '9999').localeCompare(b.deadline || '9999'));
+  } else if (ui.goalSort === 'progress') {
+    sorted.sort((a, b) => goalProgress(b) - goalProgress(a));
+  } else if (ui.goalSort === 'recent') {
+    sorted.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }
+
   return `
     <div class="section-title">🎯 Goals</div>
-    <button class="btn primary block" data-action="add-goal" style="margin-bottom:16px">＋ New Goal</button>
 
-    ${S.goals.length ? S.goals.map(g => {
+    ${S.goals.length > 0 ? `
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">This Week</div>
+        <span class="xs muted">Goal progress</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:flex-end;height:60px;padding-top:8px">
+        ${week.map(w => `
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end">
+            <div style="width:100%;border-radius:6px 6px 3px 3px;background:${w.pct > 70 ? 'var(--green)' : w.pct > 30 ? 'var(--amber)' : 'var(--card2)'};height:${Math.max(4, w.pct)}%;transition:.3s"></div>
+            <div class="xs muted" style="font-weight:700">${DOW[parseISO(w.date).getDay()][0]}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>` : ''}
+
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button class="btn primary" data-action="add-goal" style="flex:1">＋ New Goal</button>
+      <button class="btn" data-action="goal-templates" style="flex:0 0 auto;padding-left:14px;padding-right:14px">📋 Templates</button>
+    </div>
+
+    ${S.goals.length > 0 ? `
+    <div style="display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none">
+      <select
+        data-action="goal-sort"
+        style="flex:0 0 auto;width:auto;margin:0;padding:9px 12px;font-size:12.5px;font-weight:700;border-radius:10px;background:var(--card);border:1px solid var(--line);color:var(--text)"
+      >
+        <option value="deadline" ${ui.goalSort === 'deadline' ? 'selected' : ''}>📅 Deadline</option>
+        <option value="progress" ${ui.goalSort === 'progress' ? 'selected' : ''}>📊 Progress</option>
+        <option value="recent"   ${ui.goalSort === 'recent'   ? 'selected' : ''}>🆕 Recent</option>
+      </select>
+    </div>` : ''}
+
+    ${sorted.length ? sorted.map(g => {
       const pct = goalProgress(g);
       const daysLeft = g.deadline ? daysBetween(todayISO(), g.deadline) : null;
+      const isComplete = pct === 100;
+      const cat = CATEGORIES[g.category] || CATEGORIES.study;
+      
       return `
-        <div class="goal-card">
+        <div class="goal-card" style="${isComplete ? 'border-color:var(--green);background:linear-gradient(135deg, rgba(34,197,94,.06), transparent)' : ''}">
           <div class="goal-head">
             <div style="min-width:0">
-              <div class="goal-title">🎯 ${esc(g.title)}</div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <div class="goal-title">${isComplete ? '🎉' : '🎯'} ${esc(g.title)}</div>
+                <span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;background:${g.color || '#6c8cff'}22;color:${g.color || '#6c8cff'}">
+                  ${cat.icon} ${cat.label}
+                </span>
+              </div>
               ${g.desc ? `<div class="xs muted" style="margin-top:4px">${esc(g.desc)}</div>` : ''}
               <div class="xs muted" style="margin-top:6px">
-                ${g.deadline ? `📅 ${fmtShort(g.deadline)} ${daysLeft !== null ? `· ${daysLeft >= 0 ? daysLeft + ' days left' : Math.abs(daysLeft) + ' days overdue'}` : ''}` : ''}
+                ${g.deadline ? `📅 ${fmtShort(g.deadline)} ${daysLeft !== null ? `· ${daysLeft >= 0 ? daysLeft + ' days left' : '<span style="color:#ef4444">' + Math.abs(daysLeft) + ' days overdue</span>'}` : ''}` : ''}
                 ${g.dailyTarget ? ` · ⏱️ ${humanMinutes(g.dailyTarget)}/day` : ''}
               </div>
             </div>
@@ -839,15 +898,18 @@ function renderGoals() {
 
           <div style="margin-top:13px">
             <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:800;margin-bottom:6px">
-              <span class="muted">Progress</span><span>${pct}%</span>
+              <span class="muted">${isComplete ? '✅ Completed!' : 'Progress'}</span>
+              <span style="color:${isComplete ? 'var(--green)' : 'inherit'}">${pct}%</span>
             </div>
-            <div class="bar"><i style="width:${pct}%"></i></div>
+            <div class="bar" style="height:10px">
+              <i style="width:${pct}%;${isComplete ? 'background:var(--green)' : ''}"></i>
+            </div>
           </div>
 
           <div class="sep"></div>
 
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <div class="xs muted" style="font-weight:800;letter-spacing:.5px">MILESTONES</div>
+            <div class="xs muted" style="font-weight:800;letter-spacing:.5px">MILESTONES (${(g.milestones || []).filter(m => m.done).length}/${(g.milestones || []).length})</div>
             <button class="btn sm" data-action="add-milestone" data-id="${g.id}">+ Add</button>
           </div>
 
@@ -862,11 +924,20 @@ function renderGoals() {
           `).join('') || `<div class="xs muted" style="padding:6px 0">No milestones yet.</div>`}
 
           <div style="display:flex;gap:8px;margin-top:12px">
-            <button class="btn sm" data-action="goal-focus" data-id="${g.id}">⏱️ Focus</button>
+            ${!isComplete ? `
+              <button class="btn sm" data-action="goal-focus" data-id="${g.id}">⏱️ Focus</button>
+            ` : ''}
             <button class="btn sm danger" data-action="del-goal" data-id="${g.id}">Delete</button>
           </div>
         </div>`;
-    }).join('') : `<div class="empty"><span class="big">🎯</span>No goals yet. Create your first one!</div>`}
+    }).join('') : `
+      <div class="empty" style="padding:40px 20px">
+        <span class="big">🎯</span>
+        <div style="margin-top:8px;font-weight:700">No goals yet</div>
+        <div class="xs muted" style="margin-top:4px;margin-bottom:16px">Templates se quick start kariye</div>
+        <button class="btn primary" data-action="goal-templates">📋 Browse Templates</button>
+      </div>
+    `}
   `;
 }
 
@@ -1481,7 +1552,7 @@ function renderSettings() {
     <div class="card" style="text-align:center">
       <div style="font-size:26px">🎓</div>
       <div style="font-weight:800;margin-top:6px">StudyMate</div>
-      <div class="xs muted" style="margin-top:4px">Version 1.1 · Full Cloud Sync</div>
+      <div class="xs muted" style="margin-top:4px">Version 1.2 · Enhanced Tasks & Goals</div>
     </div>
   `;
 }
@@ -1658,7 +1729,7 @@ function routineModal(item) {
 }
 
 function goalModal(goal) {
-  const g = goal || { title: '', desc: '', deadline: '', dailyTarget: 30, color: '#6c8cff' };
+  const g = goal || { title: '', desc: '', deadline: '', dailyTarget: 30, color: '#6c8cff', category: 'study' };
   openModal({
     title: goal ? 'Edit Goal' : 'New Goal',
     body: `
@@ -1684,6 +1755,17 @@ function goalModal(goal) {
           })}
         </select>
       </label>
+      <label>Category
+        <select name="category">
+          ${opts(['study', 'career', 'health', 'personal', 'skill'], g.category || 'study', {
+            study: '📚 Study',
+            career: '💼 Career',
+            health: '🏃 Health',
+            personal: '👤 Personal',
+            skill: '🎓 Skill'
+          })}
+        </select>
+      </label>
     `,
     submit: goal ? 'Save Changes' : 'Create Goal',
     onSubmit(fd) {
@@ -1693,10 +1775,11 @@ function goalModal(goal) {
         deadline: fd.get('deadline'),
         dailyTarget: Number(fd.get('dailyTarget')) || 0,
         color: fd.get('color'),
+        category: fd.get('category'),
       };
       if (!data.title) return false;
       if (goal) Object.assign(goal, data);
-      else S.goals.push({ id: uid(), milestones: [], progress: 0, ...data });
+      else S.goals.push({ id: uid(), milestones: [], progress: 0, createdAt: Date.now(), ...data });
       save();
       render();
       toast(goal ? 'Goal updated' : 'Goal created 🎯');
@@ -1895,112 +1978,138 @@ function quickAddSheet() {
   });
 }
 
-/* ================================================================
-   23. NOTIFICATIONS — FINAL ANDROID FIX
-   ================================================================ */
+function goalTemplates() {
+  const templates = [
+    {
+      title: 'Learn Java',
+      desc: 'Complete Java from basics to project',
+      dailyTarget: 45,
+      color: '#6c8cff',
+      category: 'skill',
+      milestones: ['Java Basics', 'OOP', 'Collections', 'Exception Handling', 'File Handling', 'Project']
+    },
+    {
+      title: 'Master DSA',
+      desc: 'Solve 200+ DSA problems',
+      dailyTarget: 60,
+      color: '#8b5cf6',
+      category: 'study',
+      milestones: ['Arrays & Strings', 'Linked Lists', 'Trees', 'Graphs', 'DP', '200 Problems']
+    },
+    {
+      title: 'Prepare for Internship',
+      desc: 'DSA + Projects + Resume',
+      dailyTarget: 60,
+      color: '#06b6d4',
+      category: 'career',
+      milestones: ['Java', 'DSA', 'SQL', 'Projects', 'Resume', 'Mock Interviews']
+    },
+    {
+      title: 'Improve Coding',
+      desc: 'Daily coding practice',
+      dailyTarget: 30,
+      color: '#22c55e',
+      category: 'skill',
+      milestones: ['HTML/CSS', 'JavaScript', 'React', 'Node.js', 'Projects']
+    },
+    {
+      title: 'Stay Fit',
+      desc: 'Exercise daily',
+      dailyTarget: 30,
+      color: '#f59e0b',
+      category: 'health',
+      milestones: ['30 min exercise/day', 'Diet tracking', 'Sleep 7+ hrs']
+    }
+  ];
+  
+  openModal({
+    title: '🎯 Goal Templates',
+    hideSubmit: true,
+    body: `
+      <p class="xs muted" style="margin-bottom:12px">Quick-start with ready-made goals:</p>
+      ${templates.map((tpl, idx) => `
+        <button
+          class="sheet-item"
+          data-action="add-template-goal"
+          data-idx="${idx}"
+          style="border:1px solid var(--line);margin-bottom:8px;border-radius:12px;background:var(--card2)"
+        >
+          <div style="width:44px;height:44px;border-radius:12px;background:${tpl.color}22;display:grid;place-items:center;font-size:20px;flex-shrink:0">
+            ${CATEGORIES[tpl.category]?.icon || '🎯'}
+          </div>
+          <div style="flex:1;text-align:left;min-width:0">
+            <div style="font-size:14.5px;font-weight:750">${esc(tpl.title)}</div>
+            <div class="xs muted" style="margin-top:2px">${esc(tpl.desc)}</div>
+            <div class="xs muted" style="margin-top:3px">⏱️ ${tpl.dailyTarget} min/day · ${tpl.milestones.length} milestones</div>
+          </div>
+          <div style="font-size:20px;color:var(--accent)">＋</div>
+        </button>
+      `).join('')}
+    `
+  });
+  
+  window._goalTemplates = templates;
+}
 
+/* ================================================================
+   23. NOTIFICATIONS
+   ================================================================ */
 let notificationTimer = null;
 let studyMateSW = null;
 
 async function registerStudyMateServiceWorker() {
-  if (!('serviceWorker' in navigator)) {
-    console.warn('Service Worker is not supported.');
-    return null;
-  }
-
+  if (!('serviceWorker' in navigator)) return null;
   try {
     const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-    console.log('StudyMate Service Worker registered:', registration.scope);
     studyMateSW = registration;
     if (registration.active) return registration;
     await navigator.serviceWorker.ready;
     studyMateSW = await navigator.serviceWorker.getRegistration('/');
     return studyMateSW;
   } catch (error) {
-    console.error('Service Worker registration failed:', error);
     studyMateSW = null;
     return null;
   }
 }
 
-function notificationSupported() {
-  return ('Notification' in window && window.isSecureContext);
-}
-
 async function enableNotifications() {
-  if (!('Notification' in window)) {
-    toast('This browser does not support notifications.');
-    return false;
-  }
-  if (!window.isSecureContext) {
-    toast('Open StudyMate using the HTTPS Render URL.');
-    return false;
-  }
+  if (!('Notification' in window)) { toast('Browser does not support notifications.'); return false; }
+  if (!window.isSecureContext) { toast('Open using HTTPS.'); return false; }
   try {
     await registerStudyMateServiceWorker();
     let permission = Notification.permission;
-    if (permission === 'default') {
-      permission = await Notification.requestPermission();
-    }
-    console.log('Notification permission:', permission);
+    if (permission === 'default') permission = await Notification.requestPermission();
+    
     if (permission !== 'granted') {
       S.settings.notify = false;
       save();
-      if (permission === 'denied') {
-        toast('❌ Notifications are blocked. Allow them in Chrome settings.');
-      } else {
-        toast('Notification permission was not granted.');
-      }
+      toast(permission === 'denied' ? '❌ Notifications blocked in settings.' : 'Permission not granted.');
       render();
       return false;
     }
     S.settings.notify = true;
     save();
     startNotificationLoop();
-    const success = await notify('🎓 StudyMate', 'Notifications are working successfully!');
+    const success = await notify('🎓 StudyMate', 'Notifications are working!');
     render();
-    if (success) {
-      toast('🔔 Notifications enabled successfully!');
-    } else {
-      toast('Permission is enabled, but notification could not be sent.');
-    }
+    toast(success ? '🔔 Notifications enabled!' : 'Permission ok, but failed to send.');
     return success;
-  } catch (error) {
-    console.error('Enable notification error:', error);
-    toast('Could not enable notifications.');
-    return false;
-  }
+  } catch (error) { toast('Could not enable notifications.'); return false; }
 }
 
 async function notify(title, body) {
-  if (!('Notification' in window)) return false;
-  if (Notification.permission !== 'granted') return false;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return false;
   try {
     let registration = studyMateSW;
-    if (!registration && 'serviceWorker' in navigator) {
-      registration = await navigator.serviceWorker.getRegistration('/');
-    }
-    if (!registration) {
-      registration = await registerStudyMateServiceWorker();
-    }
+    if (!registration && 'serviceWorker' in navigator) registration = await navigator.serviceWorker.getRegistration('/');
+    if (!registration) registration = await registerStudyMateServiceWorker();
     if (registration && typeof registration.showNotification === 'function') {
-      await registration.showNotification(title, {
-        body: body,
-        tag: 'studymate-' + Date.now(),
-        renotify: true,
-        vibrate: [200, 100, 200]
-      });
+      await registration.showNotification(title, { body: body, tag: 'studymate-' + Date.now(), renotify: true, vibrate: [200, 100, 200] });
       return true;
     }
-    if (typeof Notification === 'function') {
-      new Notification(title, { body: body });
-      return true;
-    }
+    if (typeof Notification === 'function') { new Notification(title, { body: body }); return true; }
     return false;
-  } catch (error) {
-    console.error('Notification failed:', error);
-    return false;
-  }
+  } catch (error) { return false; }
 }
 
 function reminderAppliesToday(reminder, dateISO) {
@@ -2009,77 +2118,55 @@ function reminderAppliesToday(reminder, dateISO) {
   if (repeat === 'none') return reminder.date === dateISO;
   if (repeat === 'daily') return true;
   if (repeat === 'weekdays') return [1, 2, 3, 4, 5].includes(currentDay);
-  if (repeat === 'weekly') {
-    if (!reminder.date) return false;
-    return parseISO(dateISO).getDay() === parseISO(reminder.date).getDay();
-  }
+  if (repeat === 'weekly') return reminder.date && parseISO(dateISO).getDay() === parseISO(reminder.date).getDay();
   if (repeat === 'custom') return (reminder.days || []).includes(currentDay);
   return false;
 }
 
 function checkDueNotifications() {
-  if (!('Notification' in window)) return;
-  if (!S.settings.notify) return;
-  if (Notification.permission !== 'granted') {
-    S.settings.notify = false;
-    save();
-    return;
-  }
+  if (!('Notification' in window) || !S.settings.notify) return;
+  if (Notification.permission !== 'granted') { S.settings.notify = false; save(); return; }
   const today = todayISO();
   const currentMinutes = minutesOf(nowHM());
 
-  S.reminders
-    .filter(reminder => reminder.enabled && reminder.time)
-    .forEach(reminder => {
-      if (!reminderAppliesToday(reminder, today)) return;
-      const dueMinutes = minutesOf(reminder.time);
-      const key = `rem:${reminder.id}:${today}:${reminder.time}`;
-      if (currentMinutes >= dueMinutes && currentMinutes - dueMinutes <= 30 && !S.fired[key]) {
-        S.fired[key] = true;
-        save();
-        notify('🔔 ' + reminder.title, 'Scheduled for ' + fmtTime(reminder.time));
-      }
-    });
-
-  S.tasks
-    .filter(task => !task.done && task.date === today && task.time && task.remind && task.remind !== 'none')
-    .forEach(task => {
-      const minutesBefore = Number(task.remind);
-      if (!Number.isFinite(minutesBefore)) return;
-      const dueMinutes = minutesOf(task.time) - minutesBefore;
-      const key = `task:${task.id}:${today}:${task.remind}`;
-      if (currentMinutes >= dueMinutes && currentMinutes - dueMinutes <= 30 && !S.fired[key]) {
-        S.fired[key] = true;
-        save();
-        notify('⏰ ' + task.title, 'Starts at ' + fmtTime(task.time));
-      }
-    });
-
-  Object.keys(S.fired).forEach(key => {
-    const match = key.match(/\d{4}-\d{2}-\d{2}/);
-    if (match && match[0] !== today) {
-      delete S.fired[key];
+  S.reminders.filter(r => r.enabled && r.time).forEach(r => {
+    if (!reminderAppliesToday(r, today)) return;
+    const dueMinutes = minutesOf(r.time);
+    const key = `rem:${r.id}:${today}:${r.time}`;
+    if (currentMinutes >= dueMinutes && currentMinutes - dueMinutes <= 30 && !S.fired[key]) {
+      S.fired[key] = true;
+      save();
+      notify('🔔 ' + r.title, 'Scheduled for ' + fmtTime(r.time));
     }
   });
 
+  S.tasks.filter(t => !t.done && t.date === today && t.time && t.remind && t.remind !== 'none').forEach(t => {
+    const minutesBefore = Number(t.remind);
+    if (!Number.isFinite(minutesBefore)) return;
+    const dueMinutes = minutesOf(t.time) - minutesBefore;
+    const key = `task:${t.id}:${today}:${t.remind}`;
+    if (currentMinutes >= dueMinutes && currentMinutes - dueMinutes <= 30 && !S.fired[key]) {
+      S.fired[key] = true;
+      save();
+      notify('⏰ ' + t.title, 'Starts at ' + fmtTime(t.time));
+    }
+  });
+
+  Object.keys(S.fired).forEach(key => {
+    const match = key.match(/\d{4}-\d{2}-\d{2}/);
+    if (match && match[0] !== today) delete S.fired[key];
+  });
   save();
 }
 
 function startNotificationLoop() {
   if (notificationTimer !== null) return;
   checkDueNotifications();
-  notificationTimer = setInterval(() => {
-    checkDueNotifications();
-  }, 15000);
+  notificationTimer = setInterval(checkDueNotifications, 15000);
 }
 
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) checkDueNotifications();
-});
-
-window.addEventListener('focus', () => {
-  checkDueNotifications();
-});
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDueNotifications(); });
+window.addEventListener('focus', () => { checkDueNotifications(); });
 
 /* ================================================================
    24. GLOBAL EVENT DELEGATION
@@ -2092,11 +2179,7 @@ document.addEventListener('click', e => {
   const navEl = e.target.closest('[data-nav]');
   const drawerNav = e.target.closest('[data-nav-drawer]');
 
-  if (drawerNav) {
-    closeDrawer();
-    navigate(drawerNav.dataset.navDrawer);
-    return;
-  }
+  if (drawerNav) { closeDrawer(); navigate(drawerNav.dataset.navDrawer); return; }
   if (navEl && !el) { navigate(navEl.dataset.nav); return; }
   if (!el) return;
 
@@ -2138,45 +2221,27 @@ document.addEventListener('click', e => {
     case 'task-filter': ui.taskFilter = el.dataset.filter; render(); break;
 
     case 'task-sort': ui.taskSort = el.value; render(); break;
-
-    case 'task-clear-search':
-      ui.taskSearch = '';
-      render();
-      break;
-
+    case 'task-clear-search': ui.taskSearch = ''; render(); break;
+    
     case 'task-quick-filter': {
       const qf = el.dataset.qf;
       ui.taskQuickFilter = (ui.taskQuickFilter === qf) ? '' : qf;
       render();
       break;
     }
-
-    case 'task-clear-quick':
-      ui.taskQuickFilter = '';
-      render();
-      break;
+    case 'task-clear-quick': ui.taskQuickFilter = ''; render(); break;
 
     case 'pin-task': {
       const task = getTask(id);
       if (!task) break;
       task.pinned = !task.pinned;
-      save();
-      render();
+      save(); render();
       toast(task.pinned ? 'Task pinned 📌' : 'Task unpinned');
       break;
     }
 
-    case 'bulk-enter':
-      ui.bulkMode = true;
-      ui.selectedTasks = [];
-      render();
-      break;
-
-    case 'bulk-cancel':
-      ui.bulkMode = false;
-      ui.selectedTasks = [];
-      render();
-      break;
+    case 'bulk-enter': ui.bulkMode = true; ui.selectedTasks = []; render(); break;
+    case 'bulk-cancel': ui.bulkMode = false; ui.selectedTasks = []; render(); break;
 
     case 'bulk-toggle': {
       const idx = ui.selectedTasks.indexOf(id);
@@ -2191,30 +2256,21 @@ document.addEventListener('click', e => {
       let count = 0;
       ui.selectedTasks.forEach(tid => {
         const task = getTask(tid);
-        if (task && !task.done) {
-          task.done = true;
-          count++;
-        }
+        if (task && !task.done) { task.done = true; count++; }
       });
       if (count > 0) markActivity();
-      save();
-      toast(`${count} task${count === 1 ? '' : 's'} completed ✅`);
-      ui.bulkMode = false;
-      ui.selectedTasks = [];
-      render();
+      save(); toast(`${count} tasks completed ✅`);
+      ui.bulkMode = false; ui.selectedTasks = []; render();
       break;
     }
 
     case 'bulk-delete': {
       if (!ui.selectedTasks.length) { toast('No tasks selected'); break; }
-      if (!confirm(`Delete ${ui.selectedTasks.length} task${ui.selectedTasks.length === 1 ? '' : 's'}?`)) break;
+      if (!confirm(`Delete ${ui.selectedTasks.length} task(s)?`)) break;
       const count = ui.selectedTasks.length;
       S.tasks = S.tasks.filter(t => !ui.selectedTasks.includes(t.id));
-      save();
-      toast(`${count} task${count === 1 ? '' : 's'} deleted 🗑️`);
-      ui.bulkMode = false;
-      ui.selectedTasks = [];
-      render();
+      save(); toast(`${count} tasks deleted 🗑️`);
+      ui.bulkMode = false; ui.selectedTasks = []; render();
       break;
     }
 
@@ -2227,6 +2283,31 @@ document.addEventListener('click', e => {
     }
     case 'edit-routine': routineModal(getRoutine(id)); break;
 
+    case 'goal-sort': ui.goalSort = el.value; render(); break;
+    case 'goal-templates': goalTemplates(); break;
+    case 'add-template-goal': {
+      const idx = Number(el.dataset.idx);
+      const tpl = window._goalTemplates?.[idx];
+      if (!tpl) break;
+      closeModal();
+      setTimeout(() => {
+        S.goals.push({
+          id: uid(),
+          title: tpl.title,
+          desc: tpl.desc,
+          deadline: addDays(todayISO(), 60),
+          dailyTarget: tpl.dailyTarget,
+          color: tpl.color,
+          category: tpl.category,
+          progress: 0,
+          milestones: tpl.milestones.map(m => ({ id: uid(), title: m, done: false })),
+          createdAt: Date.now(),
+        });
+        save(); render(); toast(`🎯 ${tpl.title} added!`);
+      }, 260);
+      break;
+    }
+
     case 'edit-goal': goalModal(getGoal(id)); break;
     case 'toggle-milestone': {
       const g = getGoal(el.dataset.goal);
@@ -2238,9 +2319,7 @@ document.addEventListener('click', e => {
       const g = getGoal(id);
       openModal({
         title: 'Add Milestone',
-        body: `<label>Milestone
-                 <input name="title" required placeholder="e.g. Exception Handling">
-               </label>`,
+        body: `<label>Milestone <input name="title" required placeholder="e.g. Exception Handling"></label>`,
         submit: 'Add',
         onSubmit(fd) {
           const title = fd.get('title').trim();
@@ -2277,32 +2356,24 @@ document.addEventListener('click', e => {
       break;
     }
     case 'edit-reminder': reminderModal(getReminder(id)); break;
-
-    case 'enable-notify':
-      enableNotifications();
-      break;
-
-    case 'test-notify':
+    case 'enable-notify': enableNotifications(); break;
+    case 'test-notify': {
       if (!('Notification' in window) || Notification.permission !== 'granted' || !S.settings.notify) {
         enableNotifications();
       } else {
         notify('🎓 StudyMate', 'This is a test notification.').then(sent => {
-          toast(sent ? 'Test notification sent!' : 'Test notification failed. Check browser settings.');
+          toast(sent ? 'Test notification sent!' : 'Test failed.');
         });
       }
       break;
+    }
 
-    case 'toggle-subject':
-      ui.expandedSubjects[id] = !ui.expandedSubjects[id];
-      render();
-      break;
+    case 'toggle-subject': ui.expandedSubjects[id] = !ui.expandedSubjects[id]; render(); break;
     case 'add-unit': {
       const s = getSubject(id);
       openModal({
         title: 'Add Unit',
-        body: `<label>Unit name
-                 <input name="name" required placeholder="e.g. Unit 3 — Trees">
-               </label>`,
+        body: `<label>Unit name <input name="name" required placeholder="e.g. Unit 3 — Trees"></label>`,
         submit: 'Add Unit',
         onSubmit(fd) {
           const name = fd.get('name').trim();
@@ -2325,9 +2396,7 @@ document.addEventListener('click', e => {
       const u = s.units.find(x => x.id === el.dataset.unit);
       openModal({
         title: 'Add Topic',
-        body: `<label>Topic name
-                 <input name="name" required placeholder="e.g. AVL Trees">
-               </label>`,
+        body: `<label>Topic name <input name="name" required placeholder="e.g. AVL Trees"></label>`,
         submit: 'Add Topic',
         onSubmit(fd) {
           const name = fd.get('name').trim();
@@ -2362,17 +2431,10 @@ document.addEventListener('click', e => {
         save(); render(); toast('Subject deleted');
       }
       break;
-    case 'subject-focus':
-      timer.subjectId = id;
-      navigate('focus');
-      break;
+    case 'subject-focus': timer.subjectId = id; navigate('focus'); break;
 
-    case 'timer-toggle':
-      timer.running ? pauseTimer() : startTimer();
-      break;
-    case 'timer-reset':
-      resetTimer();
-      break;
+    case 'timer-toggle': timer.running ? pauseTimer() : startTimer(); break;
+    case 'timer-reset': resetTimer(); break;
     case 'timer-preset': {
       pauseTimer();
       const m = Number(el.dataset.min);
@@ -2394,10 +2456,7 @@ document.addEventListener('click', e => {
       if (ui.calMonth > 11) { ui.calMonth = 0; ui.calYear++; }
       render();
       break;
-    case 'cal-select':
-      ui.calSelected = el.dataset.date;
-      render();
-      break;
+    case 'cal-select': ui.calSelected = el.dataset.date; render(); break;
 
     case 'edit-note': noteModal(getNote(id)); break;
     case 'del-note':
@@ -2414,11 +2473,10 @@ document.addEventListener('click', e => {
     }
 
     case 'edit-profile': profileModal(); break;
-    case 'toggle-weekstart':
-      S.settings.weekStart = S.settings.weekStart === 1 ? 0 : 1;
-      save(); render();
-      break;
+    case 'toggle-weekstart': S.settings.weekStart = S.settings.weekStart === 1 ? 0 : 1; save(); render(); break;
+    
     case 'sync-backend': syncWithBackend(); break;
+    
     case 'export-data': {
       const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -2430,9 +2488,7 @@ document.addEventListener('click', e => {
       toast('Backup downloaded ⬇️');
       break;
     }
-    case 'import-data':
-      $('#importFile').click();
-      break;
+    case 'import-data': $('#importFile').click(); break;
     case 'load-sample':
       if (confirm('Load sample data? This will replace your current data.')) {
         S = defaultState();
@@ -2460,7 +2516,6 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => {
   const el = e.target.closest('[data-action]');
   if (!el) return;
-
   if (el.dataset.action === 'note-search') {
     ui.noteQuery = el.value;
     const pos = el.selectionStart;
@@ -2468,7 +2523,6 @@ document.addEventListener('input', e => {
     const next = $('#noteSearch');
     if (next) { next.focus(); next.setSelectionRange(pos, pos); }
   }
-
   if (el.dataset.action === 'task-search') {
     ui.taskSearch = el.value;
     const pos = el.selectionStart;
@@ -2477,18 +2531,17 @@ document.addEventListener('input', e => {
     if (next) { next.focus(); next.setSelectionRange(pos, pos); }
   }
 });
+
 document.addEventListener('change', e => {
   const el = e.target.closest('[data-action]');
   if (!el) return;
   switch (el.dataset.action) {
-    case 'focus-subject':
-      timer.subjectId = el.value; break;
-    case 'set-daystart':
-      S.settings.dayStart = el.value; save(); break;
-    case 'set-dayend':
-      S.settings.dayEnd = el.value; save(); break;
+    case 'focus-subject': timer.subjectId = el.value; break;
+    case 'set-daystart': S.settings.dayStart = el.value; save(); break;
+    case 'set-dayend': S.settings.dayEnd = el.value; save(); break;
   }
 });
+
 document.addEventListener('input', e => {
   if (e.target.id === 'focusTopic') timer.topic = e.target.value;
 });
@@ -2552,7 +2605,7 @@ async function syncWithBackend() {
           })
         });
         if (res.ok) { task.synced = true; pushedCount++; }
-      } catch (e) { console.error('Task push error:', e); }
+      } catch (e) { console.error(e); }
     }
 
     for (const goal of S.goals) {
@@ -2568,7 +2621,7 @@ async function syncWithBackend() {
           })
         });
         if (res.ok) { goal.synced = true; pushedCount++; }
-      } catch (e) { console.error('Goal push error:', e); }
+      } catch (e) { console.error(e); }
     }
 
     for (const routine of S.routines) {
@@ -2583,7 +2636,7 @@ async function syncWithBackend() {
           })
         });
         if (res.ok) { routine.synced = true; pushedCount++; }
-      } catch (e) { console.error('Routine push error:', e); }
+      } catch (e) { console.error(e); }
     }
 
     for (const note of S.notes) {
@@ -2598,7 +2651,7 @@ async function syncWithBackend() {
           })
         });
         if (res.ok) { note.synced = true; pushedCount++; }
-      } catch (e) { console.error('Note push error:', e); }
+      } catch (e) { console.error(e); }
     }
 
     const tRes = await fetch(`${API_URL}/api/tasks?userId=${userId}`);
@@ -2627,7 +2680,7 @@ async function syncWithBackend() {
           S.goals.push({
             id: rg._id, title: rg.title, desc: rg.desc || '',
             deadline: rg.deadline || '', dailyTarget: rg.dailyTarget || 0,
-            color: rg.color || '#6c8cff',
+            color: rg.color || '#6c8cff', category: rg.category || 'study',
             milestones: rg.milestones || [], synced: true
           });
           pulledCount++;
