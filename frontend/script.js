@@ -146,7 +146,7 @@ function seedSampleData() {
   ];
   S.subjects = [
     {
-      id: uid(), name: 'DAA', color: '#6c8cff',
+      id: uid(), name: 'DAA', color: '#6c8cff', attachment: null, attachmentName: null,
       units: [
         { id: uid(), name: 'Unit 1 — Foundations', topics: [
           { id: uid(), name: 'Asymptotic Notation', done: false },
@@ -985,9 +985,20 @@ function renderSubjects() {
             <div class="bar"><i style="width:${pct}%;background:${s.color || 'var(--accent)'}"></i></div>
           </div>
 
+          ${s.attachment ? `
+            <div style="margin-top:12px;padding:10px;background:var(--card2);border-radius:8px;display:flex;align-items:center;gap:10px">
+              📎 <span class="xs" style="flex:1">${esc(s.attachmentName)}</span>
+              <a href="${s.attachment}" download="${esc(s.attachmentName)}" class="btn sm" style="padding:4px 8px;font-size:11px">Download</a>
+            </div>
+          ` : ''}
+
           ${open ? `
             <div class="sep"></div>
             
+            <button class="btn sm" data-action="subject-upload" data-id="${s.id}" style="margin-bottom:12px">
+              ${s.attachment ? '🔄 Change Attachment' : '📎 Upload Attachment'}
+            </button>
+
             ${linkedNotes.length > 0 ? `
               <div style="margin-bottom:12px">
                 <div class="xs" style="font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Linked Notes</div>
@@ -1004,7 +1015,10 @@ function renderSubjects() {
               <div style="margin-bottom:12px">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
                   <div class="xs" style="font-weight:800;letter-spacing:.4px;color:var(--muted);text-transform:uppercase">${esc(u.name)}</div>
-                  <button class="xs muted" data-action="del-unit" data-subject="${s.id}" data-unit="${u.id}">✕</button>
+                  <div style="display:flex;gap:8px">
+                    <button class="xs muted" data-action="edit-unit" data-subject="${s.id}" data-unit="${u.id}" style="color:var(--accent)">✏️ Edit</button>
+                    <button class="xs muted" data-action="del-unit" data-subject="${s.id}" data-unit="${u.id}">✕</button>
+                  </div>
                 </div>
                 ${u.topics.map(tp => `
                   <div class="topic ${tp.done ? 'done' : ''}">
@@ -1033,11 +1047,12 @@ function renderSubjects() {
 /* ================================================================
    14. VIEW — FOCUS TIMER
    ================================================================ */
-const timer = {
+let timer = {
   running: false,
+  mode: 'pomodoro', // 'pomodoro', 'custom', 'stopwatch'
   total: 25 * 60,
   remaining: 25 * 60,
-  mode: 'focus',
+  stopwatchSecs: 0,
   subjectId: '',
   topic: '',
   interval: null,
@@ -1050,24 +1065,37 @@ function fmtClock(sec) {
 
 function renderFocus() {
   const subjects = S.subjects;
+  const isStopwatch = timer.mode === 'stopwatch';
+  const timeDisplay = isStopwatch ? fmtClock(timer.stopwatchSecs) : fmtClock(timer.remaining);
+  const p = isStopwatch ? 0 : (timer.total ? ((timer.total - timer.remaining) / timer.total) * 100 : 0);
+
   return `
     <div class="section-title">⏱️ Focus Session</div>
 
+    <div class="chips" style="margin-bottom:14px">
+      <button class="chip ${timer.mode === 'pomodoro' ? 'active' : ''}" data-action="timer-mode" data-mode="pomodoro">Pomodoro</button>
+      <button class="chip ${timer.mode === 'custom' ? 'active' : ''}" data-action="timer-mode" data-mode="custom">Custom</button>
+      <button class="chip ${timer.mode === 'stopwatch' ? 'active' : ''}" data-action="timer-mode" data-mode="stopwatch">Stopwatch</button>
+    </div>
+
     <div class="card" style="padding:22px 16px">
       <div class="timer-wrap">
-        <div class="timer-ring" id="timerRing" style="--p:${timer.total ? ((timer.total - timer.remaining) / timer.total) * 100 : 0}">
+        <div class="timer-ring" id="timerRing" style="--p:${p}">
           <div class="timer-inner">
-            <div class="timer-time" id="timerTime">${fmtClock(timer.remaining)}</div>
-            <div class="timer-mode" id="timerMode">${timer.mode === 'focus' ? 'Focus' : 'Break'}</div>
+            <div class="timer-time" id="timerTime" style="font-size:${isStopwatch ? '48px' : '56px'}">${timeDisplay}</div>
+            <div class="timer-mode" id="timerMode">${isStopwatch ? 'Stopwatch' : (timer.mode === 'custom' ? 'Custom' : 'Focus')}</div>
           </div>
         </div>
       </div>
 
       <div class="timer-ctrls">
         <button class="btn primary" data-action="timer-toggle" style="min-width:130px">
-          ${timer.running ? '⏸ Pause' : '▶ Start'}
+          ${timer.running ? '⏸ Pause' : (isStopwatch && timer.stopwatchSecs > 0 ? '▶ Resume' : '▶ Start')}
         </button>
         <button class="btn" data-action="timer-reset">↺ Reset</button>
+        ${isStopwatch && timer.stopwatchSecs > 0 && !timer.running ? `
+          <button class="btn primary" data-action="timer-save-stopwatch" style="background:var(--green);border-color:var(--green)">💾 Save</button>
+        ` : ''}
       </div>
     </div>
 
@@ -1085,12 +1113,23 @@ function renderFocus() {
         <input id="focusTopic" value="${esc(timer.topic)}" placeholder="e.g. Dijkstra Algorithm">
       </label>
 
-      <div style="font-size:12px;font-weight:750;color:var(--muted);margin-bottom:8px">PRESET</div>
-      <div class="row-3">
-        <button class="btn sm" data-action="timer-preset" data-min="25" data-break="5">25 / 5</button>
-        <button class="btn sm" data-action="timer-preset" data-min="50" data-break="10">50 / 10</button>
-        <button class="btn sm" data-action="timer-preset" data-min="15" data-break="3">15 / 3</button>
-      </div>
+      ${timer.mode === 'custom' ? `
+        <label>Custom Duration (minutes)
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <input type="number" id="customMinutes" min="1" max="180" value="${Math.round(timer.total / 60)}" style="flex:1">
+            <button class="btn primary" data-action="set-custom-timer">Set</button>
+          </div>
+        </label>
+      ` : ''}
+
+      ${timer.mode === 'pomodoro' ? `
+        <div style="font-size:12px;font-weight:750;color:var(--muted);margin-bottom:8px">PRESET</div>
+        <div class="row-3">
+          <button class="btn sm" data-action="timer-preset" data-min="25" data-break="5">25 / 5</button>
+          <button class="btn sm" data-action="timer-preset" data-min="50" data-break="10">50 / 10</button>
+          <button class="btn sm" data-action="timer-preset" data-min="15" data-break="3">15 / 3</button>
+        </div>
+      ` : ''}
     </div>
 
     <div class="card">
@@ -1115,28 +1154,39 @@ function updateTimerUI() {
   const time = $('#timerTime');
   const mode = $('#timerMode');
   if (!ring) return;
-  const p = timer.total ? ((timer.total - timer.remaining) / timer.total) * 100 : 0;
+  
+  const isStopwatch = timer.mode === 'stopwatch';
+  const timeDisplay = isStopwatch ? fmtClock(timer.stopwatchSecs) : fmtClock(timer.remaining);
+  const p = isStopwatch ? 0 : (timer.total ? ((timer.total - timer.remaining) / timer.total) * 100 : 0);
+  
   ring.style.setProperty('--p', p);
-  time.textContent = fmtClock(timer.remaining);
-  mode.textContent = timer.mode === 'focus' ? 'Focus' : 'Break';
+  time.textContent = timeDisplay;
+  mode.textContent = isStopwatch ? 'Stopwatch' : (timer.mode === 'custom' ? 'Custom' : 'Focus');
+  
   const btn = $('[data-action="timer-toggle"]');
-  if (btn) btn.innerHTML = timer.running ? '⏸ Pause' : '▶ Start';
+  if (btn) btn.innerHTML = timer.running ? '⏸ Pause' : (isStopwatch && timer.stopwatchSecs > 0 ? '▶ Resume' : '▶ Start');
 }
 
 function startTimer() {
   if (timer.running) return;
   timer.running = true;
+  
   timer.interval = setInterval(() => {
-    timer.remaining--;
-    if (timer.remaining <= 0) {
-      clearInterval(timer.interval);
-      timer.running = false;
-      timer.remaining = 0;
+    if (timer.mode === 'stopwatch') {
+      timer.stopwatchSecs++;
       updateTimerUI();
-      completeTimer();
-      return;
+    } else {
+      timer.remaining--;
+      if (timer.remaining <= 0) {
+        clearInterval(timer.interval);
+        timer.running = false;
+        timer.remaining = 0;
+        updateTimerUI();
+        completeTimer();
+        return;
+      }
+      updateTimerUI();
     }
-    updateTimerUI();
   }, 1000);
   updateTimerUI();
 }
@@ -1147,11 +1197,15 @@ function pauseTimer() {
 }
 function resetTimer() {
   pauseTimer();
-  timer.remaining = timer.total;
+  if (timer.mode === 'stopwatch') {
+    timer.stopwatchSecs = 0;
+  } else {
+    timer.remaining = timer.total;
+  }
   updateTimerUI();
 }
 function completeTimer() {
-  if (timer.mode === 'focus') {
+  if (timer.mode === 'pomodoro' || timer.mode === 'custom') {
     const mins = Math.round(timer.total / 60);
     S.sessions.push({
       id: uid(), subjectId: timer.subjectId, topic: timer.topic || 'Focus Session',
@@ -1161,12 +1215,7 @@ function completeTimer() {
     save();
     notify('✅ Focus session complete!', `${mins} minutes logged.`);
     toast(`✅ ${mins} min session logged`);
-    timer.mode = 'break';
-    timer.total = 5 * 60;
-    timer.remaining = 5 * 60;
-  } else {
-    notify('☕ Break over', 'Time to get back to studying!');
-    timer.mode = 'focus';
+    timer.mode = 'pomodoro';
     timer.total = 25 * 60;
     timer.remaining = 25 * 60;
   }
@@ -1202,7 +1251,10 @@ function renderCalendar() {
   const selRoutine = routineForDay(sel);
 
   return `
-    <div class="section-title">🗓️ Calendar</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="section-title" style="margin:0">🗓️ Calendar</div>
+      <button class="btn sm" data-action="cal-today">Today</button>
+    </div>
 
     <div class="card">
       <div class="cal-head">
@@ -1557,7 +1609,7 @@ function renderSettings() {
     <div class="card" style="text-align:center">
       <div style="font-size:26px">🎓</div>
       <div style="font-weight:800;margin-top:6px">StudyMate</div>
-      <div class="xs muted" style="margin-top:4px">Version 1.3 · Notes & Attachments</div>
+      <div class="xs muted" style="margin-top:4px">Version 1.5 · Advanced Focus & Calendar</div>
     </div>
   `;
 }
@@ -1863,9 +1915,29 @@ function subjectModal() {
     onSubmit(fd) {
       const name = fd.get('name').trim();
       if (!name) return false;
-      S.subjects.push({ id: uid(), name, color: fd.get('color'), units: [] });
+      S.subjects.push({ id: uid(), name, color: fd.get('color'), units: [], attachment: null, attachmentName: null });
       save(); render();
       toast('Subject added 📚');
+    },
+  });
+}
+
+function unitModal(s, unit = null) {
+  openModal({
+    title: unit ? 'Edit Unit' : 'Add Unit',
+    body: `<label>Unit name <input name="name" required value="${unit ? esc(unit.name) : ''}" placeholder="e.g. Unit 3 — Trees"></label>`,
+    submit: unit ? 'Save Changes' : 'Add Unit',
+    onSubmit(fd) {
+      const name = fd.get('name').trim();
+      if (!name) return false;
+      if (unit) {
+        unit.name = name;
+      } else {
+        s.units.push({ id: uid(), name, topics: [] });
+        ui.expandedSubjects[s.id] = true;
+      }
+      save(); render();
+      toast(unit ? 'Unit updated' : 'Unit added');
     },
   });
 }
@@ -2301,16 +2373,14 @@ document.addEventListener('click', e => {
     case 'toggle-subject': ui.expandedSubjects[id] = !ui.expandedSubjects[id]; render(); break;
     case 'add-unit': {
       const s = getSubject(id);
-      openModal({
-        title: 'Add Unit',
-        body: `<label>Unit name <input name="name" required placeholder="e.g. Unit 3 — Trees"></label>`,
-        submit: 'Add Unit',
-        onSubmit(fd) {
-          const name = fd.get('name').trim(); if (!name) return false;
-          s.units.push({ id: uid(), name, topics: [] });
-          ui.expandedSubjects[s.id] = true; save(); render();
-        },
-      }); break;
+      unitModal(s);
+      break;
+    }
+    case 'edit-unit': {
+      const s = getSubject(el.dataset.subject);
+      const u = s.units.find(x => x.id === el.dataset.unit);
+      if (u) unitModal(s, u);
+      break;
     }
     case 'del-unit': {
       const s = getSubject(el.dataset.subject);
@@ -2344,6 +2414,35 @@ document.addEventListener('click', e => {
       u.topics = u.topics.filter(x => x.id !== el.dataset.topic);
       save(); render(); break;
     }
+    case 'subject-upload': {
+      const s = getSubject(id);
+      openModal({
+        title: 'Upload Subject Attachment',
+        body: `
+          <label>File (Max 2MB)
+            <input type="file" name="file" required style="padding:8px">
+          </label>
+        `,
+        submit: 'Upload',
+        onSubmit(fd) {
+          const file = fd.get('file');
+          if (!file || file.size === 0) { toast('No file selected'); return false; }
+          if (file.size > 2 * 1024 * 1024) { toast('File too large. Max 2MB.'); return false; }
+          
+          const reader = new FileReader();
+          reader.onload = () => {
+            s.attachment = reader.result;
+            s.attachmentName = file.name;
+            save(); render();
+            toast('Attachment uploaded ✅');
+            closeModal();
+          };
+          reader.readAsDataURL(file);
+          return false;
+        }
+      });
+      break;
+    }
     case 'del-subject':
       if (confirm('Delete this subject and all its topics?')) {
         S.subjects = S.subjects.filter(s => s.id !== id);
@@ -2351,15 +2450,57 @@ document.addEventListener('click', e => {
       } break;
     case 'subject-focus': timer.subjectId = id; navigate('focus'); break;
 
+    /* FOCUS TIMER */
+    case 'timer-mode': {
+      timer.mode = el.dataset.mode;
+      pauseTimer();
+      if (timer.mode === 'stopwatch') {
+        timer.stopwatchSecs = 0;
+      } else if (timer.mode === 'pomodoro') {
+        timer.total = 25 * 60;
+        timer.remaining = 25 * 60;
+      }
+      render();
+      break;
+    }
+    case 'set-custom-timer': {
+      const mins = Number($('#customMinutes')?.value) || 30;
+      pauseTimer();
+      timer.mode = 'custom';
+      timer.total = mins * 60;
+      timer.remaining = mins * 60;
+      updateTimerUI();
+      toast(`Set to ${mins} minutes`);
+      break;
+    }
     case 'timer-toggle': timer.running ? pauseTimer() : startTimer(); break;
     case 'timer-reset': resetTimer(); break;
+    case 'timer-save-stopwatch': {
+      const mins = Math.floor(timer.stopwatchSecs / 60);
+      if (mins < 1) { toast('At least 1 minute required'); break; }
+      S.sessions.push({
+        id: uid(), subjectId: timer.subjectId, topic: timer.topic || 'Stopwatch Session',
+        minutes: mins, date: todayISO(),
+      });
+      markActivity(); save();
+      timer.stopwatchSecs = 0;
+      pauseTimer(); render();
+      toast(`✅ Saved ${mins} min session`);
+      break;
+    }
     case 'timer-preset': {
       pauseTimer();
       const m = Number(el.dataset.min);
-      timer.mode = 'focus'; timer.total = m * 60; timer.remaining = m * 60;
+      timer.mode = 'pomodoro'; timer.total = m * 60; timer.remaining = m * 60;
       updateTimerUI(); toast(`Set to ${m} minutes`); break;
     }
 
+    case 'cal-today':
+      ui.calMonth = new Date().getMonth();
+      ui.calYear = new Date().getFullYear();
+      ui.calSelected = todayISO();
+      render();
+      break;
     case 'cal-prev': ui.calMonth--; if (ui.calMonth < 0) { ui.calMonth = 11; ui.calYear--; } render(); break;
     case 'cal-next': ui.calMonth++; if (ui.calMonth > 11) { ui.calMonth = 0; ui.calYear++; } render(); break;
     case 'cal-select': ui.calSelected = el.dataset.date; render(); break;
