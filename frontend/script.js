@@ -1,4 +1,4 @@
-console.log('NEW VERSION LOADED - Step 6');
+console.log('NEW VERSION LOADED - Heatmap Added');
 /* ================================================================
    0. UTILITIES
    ================================================================ */
@@ -1368,8 +1368,54 @@ function renderNotes() {
 }
 
 /* ================================================================
-   17. VIEW — PROGRESS
+   17. VIEW — PROGRESS (WITH HEATMAP)
    ================================================================ */
+function getHeatmapHTML() {
+  const today = new Date();
+  const currentDay = today.getDay();
+  const weeksToShow = 12;
+  const daysToShow = weeksToShow * 7;
+  
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - (daysToShow - 1) - currentDay);
+  
+  let cells = '';
+  for (let i = 0; i < daysToShow; i++) {
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + i);
+    const iso = isoOf(d);
+    const mins = studyMinutesOn(iso);
+    
+    let bg = 'var(--card2)';
+    if (mins > 0 && mins <= 30) bg = 'rgba(34, 197, 94, 0.4)';
+    else if (mins > 30 && mins <= 90) bg = 'rgba(34, 197, 94, 0.7)';
+    else if (mins > 90) bg = 'rgba(34, 197, 94, 1)';
+    
+    cells += `<div title="${iso}: ${humanMinutes(mins)}" style="width:12px;height:12px;border-radius:3px;background:${bg};"></div>`;
+  }
+  
+  return `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span class="xs muted" style="font-weight:800">Activity (Last 3 Months)</span>
+        <div style="display:flex;gap:4px;align-items:center">
+          <span class="xs muted" style="font-size:10px">Less</span>
+          <div style="width:10px;height:10px;border-radius:2px;background:var(--card2)"></div>
+          <div style="width:10px;height:10px;border-radius:2px;background:rgba(34, 197, 94, 0.4)"></div>
+          <div style="width:10px;height:10px;border-radius:2px;background:rgba(34, 197, 94, 0.7)"></div>
+          <div style="width:10px;height:10px;border-radius:2px;background:rgba(34, 197, 94, 1)"></div>
+          <span class="xs muted" style="font-size:10px">More</span>
+        </div>
+      </div>
+      <div style="overflow-x:auto; padding-bottom:8px; scrollbar-width:none; -webkit-overflow-scrolling:touch;">
+        <div style="display:grid; grid-template-rows:repeat(7, 12px); grid-auto-flow:column; gap:3px; width:max-content;">
+          ${cells}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderProgress() {
   const t = todayISO();
 
@@ -1418,6 +1464,8 @@ function renderProgress() {
       ${progressRow('Goals', goalPct)}
       ${progressRow('Routine', routinePct)}
     </div>
+
+    ${getHeatmapHTML()}
 
     <div class="card">
       <div class="card-head">
@@ -1610,7 +1658,7 @@ function renderSettings() {
     <div class="card" style="text-align:center">
       <div style="font-size:26px">🎓</div>
       <div style="font-weight:800;margin-top:6px">StudyMate</div>
-      <div class="xs muted" style="margin-top:4px">Version 1.5 · Advanced Focus & Calendar</div>
+      <div class="xs muted" style="margin-top:4px">Version 1.6 · Heatmap & Charts</div>
     </div>
   `;
 }
