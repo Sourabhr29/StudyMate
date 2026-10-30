@@ -13,13 +13,13 @@
 <link rel="stylesheet" href="./style.css" />
 <link rel="manifest" href="./manifest.json" />
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjIwIiBmaWxsPSIjNmM4Y2ZmIi8+PHRleHQgeD0iNTAiIHk9IjUwIiBmb250LXNpemU9IjUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjM1ZW0iPvCfjJ08L3RleHQ+PC9zdmc+" />
+<!-- Google Sign-In Script -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
-<!-- ================= AUTH ================= -->
 <div id="auth" class="auth-screen"></div>
 
-<!-- ================= SHELL ================= -->
 <div id="shell" class="shell hidden">
   <header class="topbar">
     <button class="icon-btn" data-action="open-drawer" aria-label="Menu">☰</button>
@@ -39,7 +39,6 @@
   </nav>
 </div>
 
-<!-- ================= DRAWER ================= -->
 <div id="drawer" class="drawer">
   <div class="scrim" data-action="close-drawer"></div>
   <aside class="panel">
@@ -47,7 +46,7 @@
       <div class="avatar" id="drawerAvatar">🎓</div>
       <div style="min-width:0">
         <div style="font-weight:800;font-size:15px" id="drawerName">Student</div>
-        <div class="xs muted" id="drawerSub">B.Tech · 3rd Year</div>
+        <div class="xs muted" id="drawerSub">Set up your profile</div>
       </div>
     </div>
     <button class="drawer-item" data-nav-drawer="tasks"><span class="ic">📋</span> Tasks</button>
@@ -60,36 +59,22 @@
     <div class="drawer-sep"></div>
     <button class="drawer-item" data-nav-drawer="profile"><span class="ic">👤</span> Profile</button>
     <button class="drawer-item" data-nav-drawer="settings"><span class="ic">⚙️</span> Settings</button>
+    <button class="drawer-item" data-action="logout" style="color:#ef4444"><span class="ic">🚪</span> Logout</button>
   </aside>
 </div>
 
 <div id="modal-root"></div>
 <div id="toast" class="toast"></div>
 
-<!-- Main app script -->
 <script src="./script.js"></script>
-
-<!-- Service Worker registration -->
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker
-        .register('./sw.js')
-        .then(registration => {
-          console.log(
-            'StudyMate Service Worker registered:',
-            registration.scope
-          );
-        })
-        .catch(error => {
-          console.error(
-            'Service Worker registration failed:',
-            error
-          );
-        });
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('SW registered:', reg.scope))
+        .catch(err => console.error('SW failed:', err));
     });
   }
 </script>
-
 </body>
 </html>
