@@ -1,6 +1,9 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 require('dotenv').config();
 
 const app = express();
@@ -10,165 +13,157 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// MongoDB connection
+// MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB connected successfully'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// Home route (for testing)
-app.get('/', (req, res) => {
-  res.json({ message: 'StudyMate API is running' });
+// ==================== USER MODEL (AUTH) ====================
+const userSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  phone: { type: String, unique: true, sparse: true },
+  email: { type: String, unique: true, sparse: true },
+  password: { type: String }, // Will be hashed
+  googleId: { type: String },
+  avatar: { type: String, default: '🎓' },
+  createdAt: { type: Date, default: Date.now }
 });
 
-// --- Task Model ---
+const User = mongoose.model('User', userSchema);
+
+// ==================== AUTH MIDDLEWARE ====================
+const JWT_SECRET = process.env.JWT_SECRET || 'studymate_super_secret_key_2026';
+
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.status(401).json({ message: 'Access denied. No token provided.' });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ message: 'Invalid or expired token.' });
+    req.user = user; // Attach user info to request
+    next();
+  });
+};
+
+// ==================== AUTH ROUTES ====================
+
+// 1. Register (Phone + Password)
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, phone, password } = req.body;
+
+    // Check if user exists
+    const existingUser = await User.findOne({ phone });
+    if (existingUser) return res.status(400).json({ message: 'Mobile number already registered.' });
+
+    // Hash Password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create User
+    const user = new User({ name, phone, password: hashedPassword });
+    await user.save();
+
+    // Generate JWT Token
+    const token = jwt.sign({ userId: user._id, name: user.name }, JWT_SECRET, { expiresIn: '30d' });
+
+    res.status(201).json({ token, user: { id: user._id, name: user.name, phone: user.phone, avatar: user.avatar } });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// 2. Login (Phone + Password)
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { phone, password } = req.body;
+
+    // Find User
+    const user = await User.findOne({ phone });
+    if (!user) return res.status(400).json({ message: 'Invalid mobile number or password.' });
+
+    // Check Password
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) return res.status(400).json({ message: 'Invalid mobile number or password.' });
+
+    // Generate JWT Token
+    const token = jwt.sign({ userId: user._id, name: user.name }, JWT_SECRET, { expiresIn: '30d' });
+
+    res.json({ token, user: { id: user._id, name: user.name, phone: user.phone, avatar: user.avatar } });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// 3. Google Login
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID');
+
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { credential } = req.body;
+
+    // Verify Google Token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name } = payload;
+
+    // Check if user exists
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      // Create new user if doesn't exist
+      user = new User({ name, email, googleId });
+      await user.save();
+    }
+
+    // Generate JWT Token
+    const token = jwt.sign({ userId: user._id, name: user.name }, JWT_SECRET, { expiresIn: '30d' });
+
+    res.json({ token, user: { id: user._id, name: user.name, email: user.email, avatar: user.avatar } });
+  } catch (error) {
+    console.error('Google Auth Error:', error);
+    res.status(401).json({ message: 'Google authentication failed.' });
+  }
+});
+
+// ==================== PROTECTED DATA MODELS ====================
+// (Har data ab ek specific User ID se link hoga)
+
 const taskSchema = new mongoose.Schema({
-  userId: { type: String, default: 'defaultUser' },
+  userId: { type: String, required: true }, // Now linked to Auth User
   title: { type: String, required: true },
   description: String,
-  date: { type: Date, default: Date.now },
+  date: Date,
   time: String,
-  priority: { type: String, enum: ['High', 'Medium', 'Low'], default: 'Medium' },
-  category: { type: String, default: 'Study' },
-  completed: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
+  priority: String,
+  category: String,
+  completed: { type: Boolean, default: false }
 });
-
 const Task = mongoose.model('Task', taskSchema);
 
-// --- Task Routes ---
+// ==================== PROTECTED ROUTES ====================
+// Notice the 'authenticateToken' middleware. Ab bina login kiye data nahi milega.
 
-// Get all tasks
-app.get('/api/tasks', async (req, res) => {
+app.get('/api/tasks', authenticateToken, async (req, res) => {
   try {
-    const tasks = await Task.find({ userId: req.query.userId || 'defaultUser' });
+    const tasks = await Task.find({ userId: req.user.userId }); // Only fetch MY tasks
     res.json(tasks);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// Create a task
-app.post('/api/tasks', async (req, res) => {
+app.post('/api/tasks', authenticateToken, async (req, res) => {
   try {
-    const task = new Task({
-      userId: req.body.userId || 'defaultUser',
-      title: req.body.title,
-      description: req.body.description,
-      date: req.body.date,
-      time: req.body.time,
-      priority: req.body.priority,
-      category: req.body.category
-    });
+    const task = new Task({ ...req.body, userId: req.user.userId }); // Attach MY user ID
     const saved = await task.save();
     res.status(201).json(saved);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
-});
-
-// Update a task (e.g., mark complete)
-app.patch('/api/tasks/:id', async (req, res) => {
-  try {
-    const updated = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(updated);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
-  }
-});
-
-// Delete a task
-app.delete('/api/tasks/:id', async (req, res) => {
-  try {
-    await Task.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Task deleted' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-// --- Goal Model ---
-const goalSchema = new mongoose.Schema({
-  userId: { type: String, default: 'defaultUser' },
-  title: { type: String, required: true },
-  desc: String,
-  deadline: String,
-  dailyTarget: Number,
-  color: String,
-  milestones: [{ id: String, title: String, done: Boolean }],
-  createdAt: { type: Date, default: Date.now }
-});
-const Goal = mongoose.model('Goal', goalSchema);
-
-// --- Routine Model ---
-const routineSchema = new mongoose.Schema({
-  userId: { type: String, default: 'defaultUser' },
-  title: { type: String, required: true },
-  start: String,
-  end: String,
-  icon: String,
-  category: String,
-  days: [Number],
-  createdAt: { type: Date, default: Date.now }
-});
-const Routine = mongoose.model('Routine', routineSchema);
-
-// --- Note Model ---
-const noteSchema = new mongoose.Schema({
-  userId: { type: String, default: 'defaultUser' },
-  title: { type: String, required: true },
-  content: String,
-  pinned: { type: Boolean, default: false },
-  tags: [String],
-  createdAt: { type: Date, default: Date.now }
-});
-const Note = mongoose.model('Note', noteSchema);
-
-// ==================== GOALS ROUTES ====================
-app.get('/api/goals', async (req, res) => {
-  try {
-    const goals = await Goal.find({ userId: req.query.userId || 'defaultUser' });
-    res.json(goals);
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-app.post('/api/goals', async (req, res) => {
-  try {
-    const goal = new Goal({ ...req.body, userId: req.body.userId || 'defaultUser' });
-    const saved = await goal.save();
-    res.status(201).json(saved);
   } catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-// ==================== ROUTINES ROUTES ====================
-app.get('/api/routines', async (req, res) => {
-  try {
-    const routines = await Routine.find({ userId: req.query.userId || 'defaultUser' });
-    res.json(routines);
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
+// (Note: Agar aapko Goals, Notes, Routines bhi protect karne hain, toh unme bhi 'authenticateToken' aur 'req.user.userId' use karein)
 
-app.post('/api/routines', async (req, res) => {
-  try {
-    const routine = new Routine({ ...req.body, userId: req.body.userId || 'defaultUser' });
-    const saved = await routine.save();
-    res.status(201).json(saved);
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
-
-// ==================== NOTES ROUTES ====================
-app.get('/api/notes', async (req, res) => {
-  try {
-    const notes = await Note.find({ userId: req.query.userId || 'defaultUser' });
-    res.json(notes);
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
-app.post('/api/notes', async (req, res) => {
-  try {
-    const note = new Note({ ...req.body, userId: req.body.userId || 'defaultUser' });
-    const saved = await note.save();
-    res.status(201).json(saved);
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
-
-// Start server
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
